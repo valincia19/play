@@ -1,0 +1,1 @@
+export { publicBlogRoutes } from './routes'

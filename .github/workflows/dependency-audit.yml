@@ -1,0 +1,419 @@
+name: Dependency Audit & Security Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly every Monday at 00:00
+  push:
+    paths:
+      - 'frontend/package.json'
+      - 'backend/package.json'
+      - '.github/workflows/dependency-audit.yml'
+  pull_request:
+    paths:
+      - 'frontend/package.json'
+      - 'backend/package.json'
+  workflow_dispatch:
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js for frontend
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Setup Bun for backend
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+
+    - name: Frontend Security Audit
+      id: frontend-audit
+      run: |
+        cd frontend
+        echo "🔍 Running frontend security audit..."
+        npm audit --json > npm-audit.json || true
+
+        # Check for vulnerabilities
+        VULN_COUNT=$(jq '.vulnerabilities.total // 0' npm-audit.json)
+        echo "vulnerability_count=$VULN_COUNT" >> $GITHUB_OUTPUT
+
+        if [ "$VULN_COUNT" -gt 0 ]; then
+          echo "::warning::Found $VULN_COUNT vulnerabilities in frontend"
+          echo "### 🚨 Frontend Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          jq -r '.vulnerabilities | to_entries[] | "#### \(.key)\n- **Severity**: \(.value.severity)\n- **CVEs**: \(.value.via | map(.url // "N/A") | join(", "))\n- **Patched**: \(.value.fixAvailable | tostring)\n"' npm-audit.json >> $GITHUB_STEP_SUMMARY || true
+        else
+          echo "### ✅ Frontend Security Audit" >> $GITHUB_STEP_SUMMARY
+          echo "No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Backend Security Audit
+      id: backend-audit
+      run: |
+        cd backend
+        echo "🔍 Running backend security audit..."
+
+        # Bun doesn't have audit, so we use npm audit
+        if [ -f "package-lock.json" ]; then
+          npm audit --json > npm-audit.json || true
+
+          VULN_COUNT=$(jq '.vulnerabilities.total // 0' npm-audit.json)
+          echo "vulnerability_count=$VULN_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$VULN_COUNT" -gt 0 ]; then
+            echo "::warning::Found $VULN_COUNT vulnerabilities in backend"
+            echo "### 🚨 Backend Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            jq -r '.vulnerabilities | to_entries[] | "#### \(.key)\n- **Severity**: \(.value.severity)\n- **CVEs**: \(.value.via | map(.url // "N/A") | join(", "))\n"' npm-audit.json >> $GITHUB_STEP_SUMMARY || true
+          else
+            echo "### ✅ Backend Security Audit" >> $GITHUB_STEP_SUMMARY
+            echo "No vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "### ⚠️ Backend Security Audit" >> $GITHUB_STEP_SUMMARY
+          echo "No package-lock.json found, skipping audit" >> $GITHUB_STEP_SUMMARY
+          echo "vulnerability_count=0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Check for Outdated Dependencies
+      run: |
+        echo "### 📦 Outdated Dependencies" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        echo "#### Frontend" >> $GITHUB_STEP_SUMMARY
+        cd frontend
+        npm outdated --json > outdated.json || true
+        if [ -s outdated.json ] && [ "$(jq 'length' outdated.json)" -gt 0 ]; then
+          echo "| Package | Current | Latest | Type | Homepage |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|---------|--------|------|----------|" >> $GITHUB_STEP_SUMMARY
+          jq -r 'to_entries[] | "|\(.key)|\(.value.current)|\(.value.latest)|\(.value.type)|\(.value.homepage // "N/A")|"' outdated.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "All dependencies up to date ✅" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### Backend" >> $GITHUB_STEP_SUMMARY
+        cd ../backend
+        npm outdated --json > outdated.json || true
+        if [ -s outdated.json ] && [ "$(jq 'length' outdated.json)" -gt 0 ]; then
+          echo "| Package | Current | Latest | Type | Homepage |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|---------|--------|------|----------|" >> $GITHUB_STEP_SUMMARY
+          jq -r 'to_entries[] | "|\(.key)|\(.value.current)|\(.value.latest)|\(.value.type)|\(.value.homepage // "N/A")|"' outdated.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "All dependencies up to date ✅" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: License Compliance Check
+      run: |
+        echo "### 📜 License Compliance" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        npm install -g license-checker
+
+        echo "#### Frontend" >> $GITHUB_STEP_SUMMARY
+        cd frontend
+        license-checker --production --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD" --json > license-report.json || true
+
+        if [ -f license-report.json ]; then
+          LICENSE_ISSUES=$(jq 'length' license-report.json)
+          if [ "$LICENSE_ISSUES" -eq 0 ]; then
+            echo "✅ All licenses are compliant" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Found $LICENSE_ISSUES license issues" >> $GITHUB_STEP_SUMMARY
+            jq -r 'to_entries[] | "#### \(.key)\n- **License**: \(.value.licenses)\n- **Publisher**: \(.value.publisher)\n- **Repository**: \(.value.repository // "N/A")\n"' license-report.json >> $GITHUB_STEP_SUMMARY || true
+          fi
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### Backend" >> $GITHUB_STEP_SUMMARY
+        cd ../backend
+        license-checker --production --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD" --json > license-report.json || true
+
+        if [ -f license-report.json ]; then
+          LICENSE_ISSUES=$(jq 'length' license-report.json)
+          if [ "$LICENSE_ISSUES" -eq 0 ]; then
+            echo "✅ All licenses are compliant" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Found $LICENSE_ISSUES license issues" >> $GITHUB_STEP_SUMMARY
+            jq -r 'to_entries[] | "#### \(.key)\n- **License**: \(.value.licenses)\n- **Publisher**: \(.value.publisher)\n- **Repository**: \(.value.repository // "N/A")\n"' license-report.json >> $GITHUB_STEP_SUMMARY || true
+          fi
+        fi
+
+    - name: Bundle Size Analysis
+      run: |
+        echo "### 📊 Bundle Size Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        cd frontend
+        echo "Analyzing frontend bundle size..."
+
+        # Run build to get actual bundle sizes
+        npm run build --silent || true
+
+        if [ -d "dist" ]; then
+          TOTAL_SIZE=$(find dist -type f -name "*.js" -o -name "*.css" | xargs du -cb | tail -1 | cut -f1)
+          TOTAL_SIZE_MB=$(echo "scale=2; $TOTAL_SIZE / 1024 / 1024" | bc)
+
+          echo "**Total Bundle Size:** ${TOTAL_SIZE_MB} MB" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "#### Largest Files" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Size | Size (KB) |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|-----------|" >> $GITHUB_STEP_SUMMARY
+          find dist -type f \( -name "*.js" -o -name "*.css" \) -exec du -b {} + | sort -nr | head -10 | awk '{printf "| %s | %d bytes | %.2f KB |\n", $2, $1, $1/1024}' >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Generate Security Score
+      id: security-score
+      run: |
+        # Calculate security score
+        FRONTEND_VULNS="${{ steps.frontend-audit.outputs.vulnerability_count }}"
+        BACKEND_VULNS="${{ steps.backend-audit.outputs.vulnerability_count }}"
+
+        TOTAL_VULNS=$((FRONTEND_VULNS + BACKEND_VULNS))
+
+        if [ "$TOTAL_VULNS" -eq 0 ]; then
+          SCORE=100
+          STATUS="✅ Excellent"
+        elif [ "$TOTAL_VULNS" -lt 3 ]; then
+          SCORE=80
+          STATUS="⚠️ Good"
+        elif [ "$TOTAL_VULNS" -lt 10 ]; then
+          SCORE=60
+          STATUS="🟡 Fair"
+        else
+          SCORE=40
+          STATUS="🔴 Poor"
+        fi
+
+        echo "### 🎯 Security Score: $SCORE/100 - $STATUS" >> $GITHUB_STEP_SUMMARY
+        echo "security_score=$SCORE" >> $GITHUB_OUTPUT
+        echo "vulnerabilities_total=$TOTAL_VULNS" >> $GITHUB_OUTPUT
+
+    - name: Create Issue for Critical Vulnerabilities
+      if: steps.security-score.outputs.vulnerabilities_total != '0'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let issueBody = '## 🔒 Security Vulnerabilities Detected\n\n';
+          issueBody += '**Run ID**: ' + context.runId + '\n\n';
+          issueBody += '**Date**: ' + new Date().toISOString() + '\n\n';
+
+          const frontendVulns = '${{ steps.frontend-audit.outputs.vulnerability_count }}';
+          const backendVulns = '${{ steps.backend-audit.outputs.vulnerability_count }}';
+
+          issueBody += '### Vulnerability Summary\n\n';
+          issueBody += '- **Frontend**: ' + frontendVulns + ' vulnerabilities\n';
+          issueBody += '- **Backend**: ' + backendVulns + ' vulnerabilities\n';
+          issueBody += '- **Total**: ' + (parseInt(frontendVulns) + parseInt(backendVulns)) + ' vulnerabilities\n\n';
+
+          // Add detailed frontend vulnerabilities
+          try {
+            const auditData = JSON.parse(fs.readFileSync('frontend/npm-audit.json', 'utf8'));
+            const vulns = auditData.vulnerabilities || {};
+
+            if (Object.keys(vulns).length > 0) {
+              issueBody += '### Frontend Vulnerabilities\n\n';
+              for (const [pkg, data] of Object.entries(vulns)) {
+                issueBody += `#### ${pkg}\n`;
+                issueBody += `- **Severity**: ${data.severity}\n`;
+                issueBody += `- **Via**: ${data.via?.map(v => v.url || v.name || 'Unknown').join(', ') || 'None'}\n`;
+                issueBody += `- **Fix Available**: ${data.fixAvailable ? 'Yes - ' + data.fixAvailable.latest.join(', ') : 'No'}\n`;
+                issueBody += `- **Recommendation**: ${data.recommendation || 'Update to latest version'}\n\n`;
+              }
+            }
+          } catch (error) {
+            console.log('No frontend vulnerabilities or error parsing audit');
+          }
+
+          // Add detailed backend vulnerabilities
+          try {
+            const auditData = JSON.parse(fs.readFileSync('backend/npm-audit.json', 'utf8'));
+            const vulns = auditData.vulnerabilities || {};
+
+            if (Object.keys(vulns).length > 0) {
+              issueBody += '### Backend Vulnerabilities\n\n';
+              for (const [pkg, data] of Object.entries(vulns)) {
+                issueBody += `#### ${pkg}\n`;
+                issueBody += `- **Severity**: ${data.severity}\n`;
+                issueBody += `- **Via**: ${data.via?.map(v => v.url || v.name || 'Unknown').join(', ') || 'None'}\n`;
+                issueBody += `- **Fix Available**: ${data.fixAvailable ? 'Yes - ' + data.fixAvailable.latest.join(', ') : 'No'}\n\n`;
+              }
+            }
+          } catch (error) {
+            console.log('No backend vulnerabilities or error parsing audit');
+          }
+
+          issueBody += '### Recommended Actions\n\n';
+          issueBody += '1. Review the security audit details in the workflow run\n';
+          issueBody += '2. Update vulnerable packages to patched versions\n';
+          issueBody += '3. Test thoroughly in development environment\n';
+          issueBody += '4. Deploy updates during low-traffic periods\n\n';
+
+          issueBody += '### Automated Remediation\n\n';
+          issueBody += '```bash\n';
+          issueBody += '# Run automated security update script\n';
+          issueBody += './scripts/security-update.sh all\n';
+          issueBody += '```\n\n';
+
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: ['security', 'dependencies']
+          });
+
+          const existingIssue = issues.data.find(issue =>
+            issue.title.includes('Security Vulnerabilities')
+          );
+
+          if (existingIssue) {
+            // Update existing issue
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: existingIssue.number,
+              body: issueBody
+            });
+
+            console.log('Updated existing issue #' + existingIssue.number);
+          } else {
+            // Create new issue
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Security Vulnerabilities Detected - ' + new Date().toISOString().split('T')[0],
+              body: issueBody,
+              labels: ['security', 'dependencies', 'high-priority'],
+              priority: 'high'
+            });
+
+            console.log('Created new security issue');
+          }
+
+    - name: Upload Audit Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-audit-reports-${{ github.run_number }}
+        path: |
+          frontend/npm-audit.json
+          frontend/outdated.json
+          frontend/license-report.json
+          backend/npm-audit.json
+          backend/outdated.json
+          backend/license-report.json
+        retention-days: 30
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const score = '${{ steps.security-score.outputs.security-score }}';
+          const vulns = '${{ steps.security-score.outputs.vulnerabilities_total }}';
+
+          let comment = '## 🔒 Dependency Security Scan Results\n\n';
+          comment += '### Security Score: ' + score + '/100\n\n';
+
+          if (vulns === '0') {
+            comment += '✅ **No vulnerabilities found!**\n\n';
+          } else {
+            comment += '⚠️ **Found ' + vulns + ' vulnerabilities**\n\n';
+            comment += 'Please review the full audit results in the workflow logs.\n\n';
+          }
+
+          comment += '### Quick Actions\n\n';
+          comment += '```bash\n';
+          comment += '# Update dependencies\n';
+          comment += 'npm update\n\n';
+          comment += '# Run security audit\n';
+          comment += 'npm audit fix\n';
+          comment += '```\n\n';
+
+          comment += 'See detailed reports in the workflow run.';
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+  create-dependabot-config:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create Dependabot Config
+      run: |
+        cat > .github/dependabot.yml << 'EOF'
+        version: 2
+        updates:
+          # Frontend dependencies
+          - package-ecosystem: "npm"
+            directory: "/frontend"
+            schedule:
+              interval: "weekly"
+              day: "monday"
+            open-pull-requests-limit: 10
+            versioning-strategy: increase
+            ignore:
+              # Ignore major updates that require manual review
+              - dependency-name: "react"
+                update-types: ["version-update:semver-major"]
+              - dependency-name: "react-dom"
+                update-types: ["version-update:semver-major"]
+            groups:
+              react-ecosystem:
+                patterns:
+                  - "react*"
+                  - "@reactjs/*"
+              development-dependencies:
+                patterns:
+                  - "@types/*"
+                  - "eslint*"
+                  - "prettier*"
+
+          # Backend dependencies
+          - package-ecosystem: "npm"
+            directory: "/backend"
+            schedule:
+              interval: "weekly"
+              day: "monday"
+            open-pull-requests-limit: 10
+            versioning-strategy: increase
+            ignore:
+              # Ignore major updates that may break changes
+              - dependency-name: "elysia"
+                update-types: ["version-update:semver-major"]
+              - dependency-name: "drizzle-orm"
+                update-types: ["version-update:semver-major"]
+            groups:
+              aws-sdk:
+                patterns:
+                  - "@aws-sdk/*"
+              database:
+                patterns:
+                  - "drizzle*"
+                  - "postgres"
+        EOF
+
+    - name: Commit Dependabot Config
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .github/dependabot.yml
+        git diff --staged --quiet || git commit -m "chore: add Dependabot configuration"
+        git push

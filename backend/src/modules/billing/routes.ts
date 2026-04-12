@@ -22,6 +22,19 @@ export const billingRoutes = new Elysia({ prefix: '/billing' })
       return success(history)
     }
   )
+  // POST: Generate Pakasir Checkout URL
+  .post(
+    '/checkout/qris',
+    async ({ userId, body }) => {
+      const result = await billingService.createCheckoutSession(userId!, body.planId)
+      return success(result)
+    },
+    {
+      body: t.Object({
+        planId: t.String()
+      })
+    }
+  )
   // POST: Upgrade Plan
   .post(
     '/upgrade',

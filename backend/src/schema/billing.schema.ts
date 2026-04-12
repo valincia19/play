@@ -3,7 +3,7 @@ import { users } from './user.schema'
 import { relations } from 'drizzle-orm'
 
 export const subscriptionStatusEnum = pgEnum('subscription_status', ['active', 'canceled', 'expired'])
-export const transactionStatusEnum = pgEnum('transaction_status', ['success', 'failed'])
+export const transactionStatusEnum = pgEnum('transaction_status', ['pending', 'success', 'paid', 'failed'])
 export const transactionTypeEnum = pgEnum('transaction_type', ['purchase', 'give', 'renew'])
 
 export const subscriptions = pgTable('subscriptions', {

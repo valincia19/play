@@ -55,16 +55,16 @@ export function DashboardCheckout() {
 
   const handlePayment = async () => {
     setIsProcessing(true)
-    const tId = toast.loading("Processing your payment...")
     try {
-      // Mock triggering real gateway/upgrade
-      await api.upgradePlan(planId)
-      toast.success("Payment successful! Your plan has been upgraded.", { id: tId })
-      setTimeout(() => {
-        window.location.href = '/dashboard/billing'
-      }, 1500)
+      const res = await api.createCheckoutSession(planId) as { paymentUrl: string }
+      if (res.paymentUrl) {
+        window.location.href = res.paymentUrl
+      } else {
+        toast.error("Failed to generate payment URL")
+        setIsProcessing(false)
+      }
     } catch (err: any) {
-      toast.error(err.message || "Payment failed", { id: tId })
+      toast.error(err.message || "Payment failed")
       setIsProcessing(false)
     }
   }

@@ -100,6 +100,58 @@ class BillingService {
   }
 
   /**
+   * Generates a Pakasir Checkout URL for QRIS payment
+   */
+  async createCheckoutSession(userId: string, newPlanId: string): Promise<{ paymentUrl: string }> {
+    const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
+    if (!user) throw error(errorCodes.USER_NOT_FOUND, 'User not found')
+
+    const plan = await db.query.plans.findFirst({ where: eq(plans.id, newPlanId) })
+    if (!plan) throw error(errorCodes.INVALID_INPUT, 'Invalid plan selected')
+
+    let proratedDiscount = 0
+    let amountDue = plan.price
+
+    // Calculate Proration server-side securely
+    const currentSub = await this.getSubscription(userId)
+    if (currentSub && currentSub.status === 'active' && currentSub.endDate) {
+      const currentPlanDate = await db.query.plans.findFirst({ where: eq(plans.id, currentSub.planId) })
+      if (currentPlanDate && currentPlanDate.price > 0) {
+        const end = new Date(currentSub.endDate).getTime()
+        const now = Date.now()
+        if (end > now) {
+          const remainingDays = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)))
+          const maxDays = 30
+          proratedDiscount = Math.floor((Math.min(remainingDays, maxDays) / maxDays) * currentPlanDate.price)
+        }
+      }
+    }
+
+    if (proratedDiscount > plan.price) proratedDiscount = plan.price
+    amountDue = Math.max(0, plan.price - proratedDiscount)
+
+    if (amountDue === 0) {
+      // If amount due is 0 (fully prorated), we just upgrade them directly
+      await this.upgradePlan(userId, newPlanId)
+      return { paymentUrl: '/dashboard/billing' }
+    }
+
+    const txResult = await db.insert(transactions).values({
+      userId: user.id,
+      planId: newPlanId,
+      amount: amountDue,
+      type: 'purchase',
+      status: 'pending',
+    }).returning({ id: transactions.id })
+
+    const orderId = txResult[0].id
+    const slug = process.env.PAKASIR_SLUG || 'vergaynet'
+    const paymentUrl = `https://app.pakasir.com/pay/${slug}/${amountDue}?order_id=${orderId}&qris_only=1`
+
+    return { paymentUrl }
+  }
+
+  /**
    * Process expired subscriptions and gracefully downgrade users back to the free plan.
    * Can be hooked into a cron job.
    */

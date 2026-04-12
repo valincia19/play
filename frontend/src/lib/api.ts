@@ -232,6 +232,12 @@ export const api = {
   },
 
   /** Upgrade Plan */
+  createCheckoutSession: async (planId: string) => {
+    return fetchWithAuth('/billing/checkout/qris', {
+      method: 'POST',
+      body: JSON.stringify({ planId })
+    })
+  },
   upgradePlan: async (plan: string) => {
     return apiFetch<{ message: string }>('/billing/upgrade', {
       method: 'POST',

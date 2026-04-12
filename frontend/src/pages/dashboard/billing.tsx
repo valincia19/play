@@ -451,29 +451,30 @@ export function DashboardBilling() {
               <div className="flex-1 p-5 flex flex-col justify-center">
                 <div className="flex items-center gap-2">
                   <h3 className="text-base font-semibold">{currentPlanData?.name || 'Free'}</h3>
-                  <Badge variant="outline" className="text-[10px] h-5 rounded-full px-2 font-medium">Current Plan</Badge>
+                  <Badge variant="outline" className="text-[10px] h-5 rounded-full px-2 font-medium">Current</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1.5">Monthly Plan</p>
-                <p className="text-xs text-muted-foreground mt-1">Expires upon upgrade</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Expires upon upgrade</p>
               </div>
 
               {/* Arrow Connector */}
-              <div className="w-12 flex items-center justify-center relative z-10 -mx-3">
-                <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shadow-sm">
-                  <RiArrowRightLine className="w-4 h-4 text-muted-foreground" />
+              <div className="w-10 flex items-center justify-center self-center relative -mx-2 z-10">
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border/50"></div>
+                <div className="w-8 h-8 shrink-0 rounded-full bg-background border border-border flex items-center justify-center shadow-sm relative">
+                  <RiArrowRightLine className="w-3.5 h-3.5 text-muted-foreground" />
                 </div>
               </div>
 
               {/* Right Block - Target Plan */}
-              <div className="flex-1 p-5 flex flex-col justify-center bg-primary/5 border-l border-border relative overflow-hidden">
+              <div className="flex-1 p-5 flex flex-col justify-center bg-primary/5 relative overflow-hidden">
                 <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
                 <div className="relative z-10">
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-semibold text-primary">{targetPlan?.name}</h3>
-                    <Badge variant="secondary" className="text-[10px] h-5 rounded-full px-2 font-medium bg-primary/10 text-primary border-0 hover:bg-primary/20">Upgrading</Badge>
+                    <Badge variant="secondary" className="text-[10px] h-5 rounded-full px-2 font-medium bg-primary/10 text-primary border-0">New</Badge>
                   </div>
-                  <p className="text-xs text-primary/70 mt-1.5">Monthly Plan</p>
-                  <p className="text-xs text-foreground font-medium mt-1">Effective immediately</p>
+                  <p className="text-xs text-primary/60 mt-1.5">Monthly Plan</p>
+                  <p className="text-[11px] text-foreground font-medium mt-0.5">Effective immediately</p>
                 </div>
               </div>
             </div>

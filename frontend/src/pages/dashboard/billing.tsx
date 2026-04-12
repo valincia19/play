@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from "@/contexts/auth-context"
 import { api, videoApi } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { RiCheckLine, RiFlashlightLine, RiInformationLine, RiLoader4Line, RiArrowRightLine } from "@remixicon/react"
+import { RiCheckLine, RiFlashlightLine, RiInformationLine, RiArrowRightLine } from "@remixicon/react"
 import { formatBytes } from "@/lib/utils"
 
 import type { PlanFeature } from "@/lib/types"
@@ -43,10 +44,10 @@ interface BillingPlan {
 }
 
 export function DashboardBilling() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [subscription, setSubscription] = useState<BillingSubscription | null>(null)
   const [transactions, setTransactions] = useState<BillingTransaction[]>([])
-  const [isUpgrading, setIsUpgrading] = useState<string | null>(null)
   const [targetPlan, setTargetPlan] = useState<BillingPlan | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [overview, setOverview] = useState<BillingOverview | null>(null)
@@ -93,16 +94,8 @@ export function DashboardBilling() {
     loadData()
   }, [user])
 
-  const handleUpgrade = async (planId: string) => {
-    try {
-      setIsUpgrading(planId)
-      await api.upgradePlan(planId)
-      window.location.reload()
-    } catch (err) {
-      console.error("Upgrade failed:", err)
-    } finally {
-      setIsUpgrading(null)
-    }
+  const handleUpgrade = (planId: string, amountDue: number) => {
+    navigate(`/dashboard/billing/checkout?planId=${planId}&amount=${amountDue}`)
   }
 
   // Derive plan from active subscription — NOT from stale user.planId
@@ -385,7 +378,7 @@ export function DashboardBilling() {
                   <Button 
                     className="w-full" 
                     variant={isCurrentPlan ? "outline" : isDowngrade ? "ghost" : isCreator ? "default" : "secondary"}
-                    disabled={isCurrentPlan || isDowngrade || isUpgrading !== null}
+                    disabled={isCurrentPlan || isDowngrade}
                     onClick={() => setTargetPlan(plan)}
                   >
                     {isCurrentPlan ? (
@@ -458,7 +451,7 @@ export function DashboardBilling() {
       </div>
 
       {/* Premium Upgrade Modal */}
-      <Dialog open={!!targetPlan} onOpenChange={(open) => !open && !isUpgrading && setTargetPlan(null)}>
+      <Dialog open={!!targetPlan} onOpenChange={(open) => !open && setTargetPlan(null)}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-xl font-semibold tracking-tight">Upgrade Plan</DialogTitle>
@@ -529,23 +522,16 @@ export function DashboardBilling() {
             <Button 
               variant="outline" 
               onClick={() => setTargetPlan(null)}
-              disabled={!!isUpgrading}
               className="min-w-[100px]"
             >
               Cancel
             </Button>
             <Button 
               variant="default"
-              onClick={() => handleUpgrade(targetPlan?.id || '')}
-              disabled={!!isUpgrading}
+              onClick={() => handleUpgrade(targetPlan?.id || '', totalDue)}
               className="min-w-[140px]"
             >
-              {isUpgrading ? (
-                <>
-                  <RiLoader4Line className="w-4 h-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : "Confirm Upgrade"}
+              Continue to Checkout
             </Button>
           </DialogFooter>
         </DialogContent>

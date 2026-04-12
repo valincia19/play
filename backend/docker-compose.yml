@@ -32,6 +32,31 @@ services:
     depends_on:
       - redis
 
+  api:
+    build: .
+    container_name: vercelplay-api
+    restart: always
+    ports:
+      - '4000:4000'
+    env_file: .env
+    volumes:
+      - ./tmp-processing:/app/tmp-processing
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: .
+    container_name: vercelplay-worker
+    restart: always
+    command: bun run start:worker
+    env_file: .env
+    volumes:
+      - ./tmp-processing:/app/tmp-processing
+    depends_on:
+      - postgres
+      - redis
+
 volumes:
   postgres_data:
   redis_data:

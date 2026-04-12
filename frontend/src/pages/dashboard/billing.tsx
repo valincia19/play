@@ -132,6 +132,26 @@ export function DashboardBilling() {
   const isUnlimitedStorage = storageLimitMB === -1
   const storagePercent = storageUsage?.percent ?? (isUnlimitedStorage ? 0 : Math.min(100, (usedStorageMB / storageLimitMB) * 100))
 
+  // Proration Calculation for Upgrade
+  let proratedDiscount = 0
+  let remainingDays = 0
+  
+  if (targetPlan && currentPlanData && currentPlanData.price > 0 && subscription?.status === 'active' && subscription.endDate) {
+    const end = new Date(subscription.endDate).getTime()
+    const now = Date.now()
+    if (end > now) {
+      remainingDays = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)))
+      const maxDays = 30 // Approximate a month
+      proratedDiscount = Math.floor((Math.min(remainingDays, maxDays) / maxDays) * currentPlanData.price)
+    }
+  }
+  
+  // Ensure we don't discount more than the target plan's price
+  if (targetPlan && proratedDiscount > targetPlan.price) {
+    proratedDiscount = targetPlan.price
+  }
+  const totalDue = targetPlan ? Math.max(0, targetPlan.price - proratedDiscount) : 0
+
   if (isLoading && dbPlans.length === 0) {
     return (
       <div className="mx-auto max-w-5xl space-y-8">
@@ -485,22 +505,23 @@ export function DashboardBilling() {
               
               <div className="space-y-3 pb-4 border-b border-border">
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Upgrade Fee</span>
-                  <span className="font-medium text-foreground">Rp {targetPlan?.price.toLocaleString('id-ID')}</span>
+                  <span className="text-muted-foreground">{targetPlan?.name} Plan</span>
+                  <span className="font-medium text-foreground">Rp {targetPlan?.price.toLocaleString('id-ID') || 0}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Credits</span>
-                  <span className="font-medium text-foreground">-Rp 0</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Balance</span>
-                  <span className="font-medium text-foreground">-Rp 0</span>
-                </div>
+                {proratedDiscount > 0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      Prorated Credit
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-1.5 rounded-sm">{remainingDays} days left</span>
+                    </span>
+                    <span className="font-medium text-emerald-500">-Rp {proratedDiscount.toLocaleString('id-ID')}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-between items-center pt-4 mt-2 border-t border-border/40">
                 <span className="font-semibold text-foreground">Total Due</span>
-                <span className="text-xl font-bold text-primary">Rp {targetPlan?.price.toLocaleString('id-ID')}</span>
+                <span className="text-xl font-bold text-primary">Rp {totalDue.toLocaleString('id-ID')}</span>
               </div>
             </div>
 

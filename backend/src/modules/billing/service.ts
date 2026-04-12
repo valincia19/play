@@ -93,7 +93,7 @@ class BillingService {
       logger.error({
         event: 'plan_upgrade_failed',
         error: err,
-        stack: err.stack
+        stack: err instanceof Error ? err.stack : undefined
       })
       throw error(errorCodes.INTERNAL_ERROR, 'Failed to process upgrade transaction')
     }

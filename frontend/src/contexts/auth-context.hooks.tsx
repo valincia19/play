@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- AuthProvider + useAuth are co-exported as a unified context API */
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import { api, getAccessToken, type UserProfile } from '@/lib/api'
 

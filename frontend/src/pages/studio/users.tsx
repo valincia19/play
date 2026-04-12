@@ -258,12 +258,12 @@ export function StudioUsers() {
         raw.planEndDate = `${y}-${m}-${d}T23:59:59.999Z`
       }
 
-      await adminApi.updateUser(editUser.id, raw as any)
+      await adminApi.updateUser(editUser.id, raw)
       toast.success('User updated successfully')
       setEditUser(null)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[EditUser] Update failed:', err)
-      const errorMsg = err?.message || err?.error?.message || 'Failed to update user'
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update user'
       toast.error(errorMsg)
     } finally {
       setIsSaving(false)
@@ -288,9 +288,9 @@ export function StudioUsers() {
       setSelectedPlanId('')
       setDurationOverride('')
       loadData()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Give plan failed:', err)
-      const errorMsg = err?.message || err?.error?.message || 'Failed to assign plan'
+      const errorMsg = err instanceof Error ? err.message : 'Failed to assign plan'
       toast.error(errorMsg)
     }
   }

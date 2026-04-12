@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import Hls from 'hls.js'
 import { RiPlayFill, RiPauseFill, RiVolumeUpFill, RiVolumeMuteFill, RiFullscreenLine, RiLoader4Line, RiAlertFill } from '@remixicon/react'
 import { cn, API_BASE_URL } from '@/lib/utils'
@@ -170,10 +170,12 @@ export function VideoPlayer(
 
   // Reset tracking state when video changes
   useEffect(() => {
-    setHasTrackedView(false)
-    setHasTriggeredFirstPlay(false)
-    setIsReady(false)
-    setError(null)
+    React.startTransition(() => {
+      setHasTrackedView(false)
+      setHasTriggeredFirstPlay(false)
+      setIsReady(false)
+      setError(null)
+    })
   }, [videoId])
 
   const changeLevel = useCallback((index: number) => {

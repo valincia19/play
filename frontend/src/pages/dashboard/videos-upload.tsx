@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { RiWifiOffLine } from "@remixicon/react"
 import { folderApi, videoApi, directUploadToS3 } from "@/lib/api"
-import type { Folder, VideoUploadResponse } from "@/lib/types"
+import type { Folder } from "@/lib/types"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context.hooks"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { UploadDropzone } from "@/components/dashboard/video/upload-dropzone"
 import { UploadQueue } from "@/components/dashboard/video/upload-queue"
 import { FolderTree } from "@/components/dashboard/video/folder-tree"
@@ -57,6 +60,7 @@ export interface UploadFileItem {
   statusDetail?: string
   uploadSpeed?: number  // bytes per second
   etaSeconds?: number   // estimated time remaining in seconds
+  fileSizeBytes?: number // detected size for remote imports
 }
 
 export function DashboardVideosUpload() {
@@ -69,6 +73,10 @@ export function DashboardVideosUpload() {
   const queryFolderId = queryParams.get("folderId")
 
   const [items, setItems] = useState<UploadFileItem[]>([])
+  const itemsRef = useRef(items)
+  useEffect(() => {
+    itemsRef.current = items
+  }, [items])
   const [folders, setFolders] = useState<Folder[]>([])
   const [queueStatus, setQueueStatus] = useState<{ waiting: number; processing: number } | null>(null)
   const [storageUsage, setStorageUsage] = useState<{ usedBytes: number; maxBytes: number; usedMB: number; maxMB: number } | null>(null)
@@ -77,9 +85,15 @@ export function DashboardVideosUpload() {
 
   const [globalFolder, setGlobalFolder] = useState<string>(queryFolderId || 'root')
   const [globalVisibility, setGlobalVisibility] = useState<'private' | 'unlisted' | 'public'>('private')
-  const [globalMode, setGlobalMode] = useState<'mp4' | 'hls'>(plan === 'pro' ? 'hls' : 'mp4')
-  const [qualityPreset, setQualityPreset] = useState<QualityPresetId>(plan === 'pro' ? 'balanced' : 'fast')
+  const [globalMode, setGlobalMode] = useState<'mp4' | 'hls'>('mp4')
+  const [qualityPreset, setQualityPreset] = useState<QualityPresetId>('fast')
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(false)
+
+  // URL Import States
+  const [importUrl, setImportUrl] = useState('')
+  const [importTitle, setImportTitle] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+  const [bulkUrls, setBulkUrls] = useState('')
 
   // Consolidated polling: single loop instead of N intervals
   const activePolls = useRef<Map<string, string>>(new Map()) // itemId -> videoId
@@ -235,6 +249,7 @@ export function DashboardVideosUpload() {
               progress: 100,
               statusDetail: 'Video is ready to publish',
               processingMode: video.processingMode,
+              fileSizeBytes: video.fileSizeBytes, // Sync actual size from server
             })
             activePolls.current.delete(itemId)
             pollFailuresRef.current.delete(itemId)
@@ -272,7 +287,7 @@ export function DashboardVideosUpload() {
           // SAFETY GUARD: If stuck in 'uploading' but we have a videoId (meaning upload completed),
           // force transition to the correct status from the server
           // (This handles edge cases where XHR finished but state didn't update)
-          const currentItem = items.find(i => i.id === itemId)
+          const currentItem = itemsRef.current.find(i => i.id === itemId)
           if (currentItem?.status === 'uploading' && (video.status === 'pending' || video.status === 'processing' || video.status === 'ready' || video.status === 'error') && currentItem.videoId) {
             updateItem(itemId, {
               status: video.status,
@@ -312,14 +327,21 @@ export function DashboardVideosUpload() {
 
     pollTimerRef.current = setInterval(runPollCycle, 3000)
 
+    // Capture ref values for cleanup (React requires stable references in cleanup functions)
+    const currentActivePolls = activePolls.current
+    const currentPollFailures = pollFailuresRef.current
+    const currentPollBackoff = pollBackoffUntilRef.current
+    const currentXhrRefs = xhrRefs.current
+    const currentCancelled = cancelledRef.current
+
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
-      activePolls.current.clear()
-      pollFailuresRef.current.clear()
-      pollBackoffUntilRef.current.clear()
-      xhrRefs.current.forEach((xhr) => xhr.abort())
-      xhrRefs.current.clear()
-      cancelledRef.current.clear()
+      currentActivePolls.clear()
+      currentPollFailures.clear()
+      currentPollBackoff.clear()
+      currentXhrRefs.forEach((xhr) => xhr.abort())
+      currentXhrRefs.clear()
+      currentCancelled.clear()
     }
   }, [updateItem])
 
@@ -474,15 +496,16 @@ export function DashboardVideosUpload() {
 
       // Refresh storage usage after successful upload
       videoApi.getStorageUsage().then(setStorageUsage).catch(() => {})
-    } catch (err: any) {
-      if (err.message === 'S3 upload cancelled' || err.message === 'Upload cancelled (abort)') return
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Upload failed'
+      if (errMsg === 'S3 upload cancelled' || errMsg === 'Upload cancelled (abort)') return
       console.error(`Upload failed for ${item.title}`, err)
       updateItem(item.id, {
         status: 'error',
-        error: err.message || 'Upload failed',
+        error: errMsg,
         statusDetail: 'Upload failed before processing started',
       })
-      toast.error(`Error: ${item.title} - ${err.message || 'Upload failed'}`)
+      toast.error(`Error: ${item.title} - ${errMsg}`)
     } finally {
       xhrRefs.current.delete(item.id)
       cancelledRef.current.delete(item.id)
@@ -565,6 +588,125 @@ export function DashboardVideosUpload() {
     })
     xhrRefs.current.clear()
   }, [updateItem])
+
+  const handleImport = useCallback(async () => {
+    if (!importUrl) return toast.error('Please enter a URL')
+    try {
+      new URL(importUrl)
+    } catch {
+      return toast.error('Please enter a valid URL')
+    }
+
+    setIsImporting(true)
+    try {
+      const cleanTitle = (importTitle || importUrl.split('/').pop() || 'Imported Video').replace(/\.[^/.]+$/, "")
+
+      const { videoId, fileSizeBytes } = await videoApi.importVideo({
+        url: importUrl,
+        title: cleanTitle,
+        folderId: globalFolder,
+        visibility: globalVisibility,
+        processingMode: globalMode,
+        qualities: globalMode === 'hls' ? QUALITY_PRESETS[qualityPreset].qualities : undefined
+      })
+
+      // We fake a local "file" item for the queue visually so it behaves the same
+      const fakeFile = new File([''], cleanTitle, { type: 'video/mp4' })
+      const itemId = crypto.randomUUID()
+      
+      const newItem: UploadFileItem = {
+        id: itemId,
+        file: fakeFile,
+        title: cleanTitle,
+        progress: 100, // importing relies on worker
+        status: 'processing', // mark as processing right away
+        videoId,
+        processingMode: globalMode,
+        fileSizeBytes,
+      }
+      setItems(prev => [...prev, newItem])
+      setImportUrl('')
+      setImportTitle('')
+      toast.success('Successfully queued URL for import')
+
+      // Start polling for this item
+      activePolls.current.set(itemId, videoId)
+      if (!pollTimerRef.current) {
+        pollTimerRef.current = setInterval(() => {
+          // just trigger a re-render or let the common polling hook pick it up
+        }, 1000)
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to import URL')
+    } finally {
+      setIsImporting(false)
+    }
+  }, [importUrl, importTitle, globalFolder, globalVisibility, globalMode, qualityPreset])
+
+  const handleBulkImport = useCallback(async () => {
+    const urls = bulkUrls.split('\n').map(u => u.trim()).filter(u => u)
+    if (urls.length === 0) return toast.error('Please enter at least one URL')
+
+    const validUrls: string[] = []
+    for (const url of urls) {
+      try {
+        new URL(url)
+        validUrls.push(url)
+      } catch {
+        toast.error(`Invalid URL skipped: ${url.substring(0, 30)}...`)
+      }
+    }
+
+    if (validUrls.length === 0) return
+
+    setIsImporting(true)
+    let successCount = 0
+
+    for (const url of validUrls) {
+      try {
+        const cleanTitle = (url.split('/').pop() || 'Imported Video').replace(/\.[^/.]+$/, "")
+
+        const { videoId, fileSizeBytes } = await videoApi.importVideo({
+          url: url,
+          title: cleanTitle,
+          folderId: globalFolder,
+          visibility: globalVisibility,
+          processingMode: globalMode,
+          qualities: globalMode === 'hls' ? QUALITY_PRESETS[qualityPreset].qualities : undefined
+        })
+
+        // Fake local file for UI consistency
+        const fakeFile = new File([''], cleanTitle, { type: 'video/mp4' })
+        const itemId = crypto.randomUUID()
+        
+        const newItem: UploadFileItem = {
+          id: itemId,
+          file: fakeFile,
+          title: cleanTitle,
+          progress: 100, // importing relies on worker
+          status: 'processing',
+          videoId,
+          processingMode: globalMode,
+          fileSizeBytes,
+        }
+        setItems(prev => [...prev, newItem])
+        successCount++
+
+        activePolls.current.set(itemId, videoId)
+        if (!pollTimerRef.current) {
+          pollTimerRef.current = setInterval(() => {}, 1000)
+        }
+      } catch (err: any) {
+        toast.error(`Failed to import: ${url.substring(0, 30)}...`)
+      }
+    }
+
+    setIsImporting(false)
+    if (successCount > 0) {
+      toast.success(`Successfully queued ${successCount} URLs for import`)
+      setBulkUrls('')
+    }
+  }, [bulkUrls, globalFolder, globalVisibility, globalMode, qualityPreset])
 
   const hasActiveWork = useMemo(() => items.some(i => i.status === 'uploading' || i.status === 'processing'), [items])
   const hasPending = useMemo(() => items.some(i => i.status === 'pending' || i.status === 'error'), [items])
@@ -676,7 +818,101 @@ export function DashboardVideosUpload() {
                   )}
                 </div>
 
-                <UploadDropzone onFilesSelected={handleFilesSelected} />
+                <Tabs defaultValue="local" className="w-full mb-2">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="local">Local File</TabsTrigger>
+                    <TabsTrigger value="import">Import URL</TabsTrigger>
+                    <TabsTrigger value="bulk-import">Bulk Import</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="local">
+                    <UploadDropzone onFilesSelected={handleFilesSelected} />
+                  </TabsContent>
+                  
+                  <TabsContent value="import">
+                    <div className="flex flex-col gap-4 rounded-xl border border-dashed border-border/60 bg-muted/20 p-6 sm:p-8 hover:bg-muted/30 transition-colors">
+                      <div className="flex flex-col items-center justify-center text-center space-y-1 mb-2">
+                        <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary mb-2">
+                          <RiFlashlightLine className="size-6" />
+                        </div>
+                        <h3 className="text-sm font-semibold">Import Remote Video</h3>
+                        <p className="text-xs text-muted-foreground max-w-sm">
+                          Paste a direct URL to a video file (.mp4, .mkv). The server will fetch it directly to your bucket.
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-4 max-w-xl mx-auto w-full">
+                        <div className="space-y-2">
+                          <Label htmlFor="import-url" className="text-xs font-medium">Video URL <span className="text-red-500">*</span></Label>
+                          <Input
+                            id="import-url"
+                            placeholder="https://example.com/video.mp4"
+                            value={importUrl}
+                            onChange={(e) => setImportUrl(e.target.value)}
+                            disabled={isImporting}
+                            className="bg-background/50 h-9"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="import-title" className="text-xs font-medium">Custom Title (Optional)</Label>
+                          <Input
+                            id="import-title"
+                            placeholder="Leave blank to use filename"
+                            value={importTitle}
+                            onChange={(e) => setImportTitle(e.target.value)}
+                            disabled={isImporting}
+                            className="bg-background/50 h-9"
+                          />
+                        </div>
+                        <Button 
+                          onClick={handleImport} 
+                          disabled={isImporting || !importUrl}
+                          className="w-full"
+                        >
+                          {isImporting ? 'Queuing Import...' : 'Import to Queue'}
+                        </Button>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="bulk-import">
+                    <div className="flex flex-col gap-4 rounded-xl border border-dashed border-border/60 bg-muted/20 p-6 sm:p-8 hover:bg-muted/30 transition-colors">
+                      <div className="flex flex-col items-center justify-center text-center space-y-1 mb-2">
+                        <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary mb-2">
+                          <RiListCheck className="size-6" />
+                        </div>
+                        <h3 className="text-sm font-semibold">Bulk Remote Import</h3>
+                        <p className="text-xs text-muted-foreground max-w-sm">
+                          Paste multiple direct video URLs (one per line). We'll queue them all for background importing.
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-4 max-w-xl mx-auto w-full">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="bulk-urls" className="text-xs font-medium">Video URLs</Label>
+                            <span className="text-[10px] text-muted-foreground">{bulkUrls.split('\n').filter(u => u.trim()).length} URLs</span>
+                          </div>
+                          <Textarea
+                            id="bulk-urls"
+                            placeholder="https://example.com/video1.mp4&#10;https://example.com/video2.mp4"
+                            value={bulkUrls}
+                            onChange={(e) => setBulkUrls(e.target.value)}
+                            disabled={isImporting}
+                            className="bg-background/50 min-h-[120px] max-h-[300px] overflow-y-auto custom-scrollbar font-mono text-xs shrink-0"
+                          />
+                        </div>
+                        <Button 
+                          onClick={handleBulkImport} 
+                          disabled={isImporting || !bulkUrls.trim()}
+                          className="w-full"
+                        >
+                          {isImporting ? 'Processing Bulk Import...' : 'Import All URLs'}
+                        </Button>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
 
                 {items.length > 0 && (
                   <section className="space-y-2.5 border-t border-border/50 pt-3">

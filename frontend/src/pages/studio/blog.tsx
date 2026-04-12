@@ -112,8 +112,8 @@ export function StudioBlog() {
       setDialogOpen(false)
       resetForm()
       loadPosts()
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save post")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save post")
     }
   }
 
@@ -123,8 +123,8 @@ export function StudioBlog() {
       await adminApi.blog.delete(id)
       toast.success("Post deleted")
       loadPosts()
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete post")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete post")
     }
   }
 

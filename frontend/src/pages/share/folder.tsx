@@ -5,11 +5,77 @@ import {
   RiPlayCircleFill,
   RiPlayCircleLine,
   RiHardDrive2Line,
-  RiTimeLine,
-  RiArrowRightSLine,
 } from "@remixicon/react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { formatBytes, API_BASE_URL, formatDuration } from "@/lib/utils"
+import { formatBytes, API_BASE_URL, formatDuration, cn } from "@/lib/utils"
+
+function FolderThumbnail({ 
+  thumbnailUrl, 
+  title, 
+  isHovered,
+  duration
+}: { 
+  thumbnailUrl: string | null, 
+  title: string, 
+  isHovered: boolean,
+  duration: number | null
+}) {
+  const [aspect, setAspect] = useState<'landscape' | 'portrait'>('landscape')
+
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth, naturalHeight } = e.currentTarget;
+    if (naturalHeight > naturalWidth) {
+      setAspect('portrait')
+    }
+  }
+
+  return (
+    <div className="relative aspect-video bg-black rounded-lg overflow-hidden transition-all duration-300">
+      {/* Blurred background for vertical videos */}
+      {aspect === 'portrait' && thumbnailUrl && (
+        <div 
+          className="absolute inset-0 bg-cover bg-center blur-xl opacity-40 scale-110"
+          style={{ backgroundImage: `url(${API_BASE_URL}${thumbnailUrl})` }}
+        />
+      )}
+
+      {thumbnailUrl ? (
+        <img
+          src={`${API_BASE_URL}${thumbnailUrl}`}
+          alt={title}
+          onLoad={handleLoad}
+          className={cn(
+            "relative z-10 w-full h-full transition-transform duration-500",
+            aspect === 'portrait' ? 'object-contain' : 'object-cover',
+            isHovered ? 'scale-105' : 'scale-100'
+          )}
+          loading="lazy"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <RiPlayCircleLine className="size-10 text-white/8" />
+        </div>
+      )}
+
+      {/* Play overlay */}
+      <div className={cn(
+        "absolute inset-0 flex items-center justify-center bg-black/20 z-20 transition-opacity duration-300",
+        isHovered ? 'opacity-100' : 'opacity-0'
+      )}>
+        <div className="flex size-11 items-center justify-center rounded-full bg-primary backdrop-blur-sm transition-transform duration-300 scale-90 group-hover:scale-100 shadow-xl">
+          <RiPlayCircleFill className="size-7 text-white" />
+        </div>
+      </div>
+
+      {/* Duration */}
+      {duration && (
+        <span className="absolute bottom-1.5 right-1.5 bg-black/70 backdrop-blur-sm text-white text-[10px] font-semibold px-1.5 py-0.5 rounded tabular-nums z-30">
+          {formatDuration(duration)}
+        </span>
+      )}
+    </div>
+  )
+}
 
 // ─── Types ─────────────────────────────────────────────────────
 interface AdPlacement {
@@ -59,8 +125,8 @@ export function ShareFolder() {
         const json = await res.json()
         if (!res.ok) throw new Error(json.message || 'Failed to fetch folder details')
         setData(json.data)
-      } catch (err: any) {
-        setError(err.message)
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred')
       } finally {
         setLoading(false)
       }
@@ -151,6 +217,9 @@ export function ShareFolder() {
           </div>
           <h2 className="text-lg font-semibold text-white">Folder Unavailable</h2>
           <p className="text-sm text-white/40 max-w-sm">{error || 'This folder could not be found or the link has expired.'}</p>
+          <a href="/" className="mt-4 px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors">
+            Go Home
+          </a>
         </div>
       </div>
     )
@@ -165,7 +234,7 @@ export function ShareFolder() {
       {/* Logo */}
       <header className="flex items-center h-14 px-5 md:px-8">
         <a href="/" className="flex items-center gap-2">
-          <RiPlayCircleFill className="size-5 text-emerald-500" />
+          <img src="/logo.webp" alt="vercelplay" className="size-5 shrink-0" />
           <span className="text-sm font-bold text-white tracking-tight">vercelplay</span>
         </a>
       </header>
@@ -196,62 +265,36 @@ export function ShareFolder() {
             <p className="text-sm text-white/30">No public videos in this folder yet.</p>
           </div>
         ) : (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {data.videos.map((video) => {
               const isHovered = hoveredVideo === video.id
               return (
                 <div
                   key={video.id}
-                  className="group rounded-lg overflow-hidden bg-white/[0.03] border border-white/[0.06] cursor-pointer transition-all duration-200 hover:bg-white/[0.05] hover:border-white/[0.12]"
+                  className="group cursor-pointer"
                   onClick={() => navigate(`/d/${video.shortId || video.id}`)}
                   onMouseEnter={() => setHoveredVideo(video.id)}
                   onMouseLeave={() => setHoveredVideo(null)}
                 >
-                  {/* Thumbnail */}
-                  <div className="relative aspect-video bg-black/40 overflow-hidden">
-                    {video.thumbnailUrl ? (
-                      <img
-                        src={`${API_BASE_URL}${video.thumbnailUrl}`}
-                        alt={video.title}
-                        className={`w-full h-full object-cover transition-transform duration-300 ${isHovered ? 'scale-105' : 'scale-100'}`}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <RiPlayCircleLine className="size-10 text-white/8" />
-                      </div>
-                    )}
-
-                    {/* Play overlay */}
-                    <div className={`absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-                      <div className="flex size-11 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm transition-transform duration-200 scale-90 group-hover:scale-100">
-                        <RiPlayCircleFill className="size-6 text-white" />
-                      </div>
-                    </div>
-
-                    {/* Duration */}
-                    {video.duration && (
-                      <span className="absolute bottom-1.5 right-1.5 bg-black/70 backdrop-blur-sm text-white text-[10px] font-semibold px-1.5 py-0.5 rounded tabular-nums">
-                        {formatDuration(video.duration)}
-                      </span>
-                    )}
-                  </div>
+                  <FolderThumbnail 
+                    thumbnailUrl={video.thumbnailUrl}
+                    title={video.title}
+                    isHovered={isHovered}
+                    duration={video.duration}
+                  />
 
                   {/* Info */}
-                  <div className="p-3">
-                    <h3 className="text-[13px] font-medium text-white/85 truncate group-hover:text-white transition-colors leading-snug">
+                  <div className="py-2.5">
+                    <h3 className="text-[13px] font-semibold text-white/90 truncate group-hover:text-primary transition-colors leading-snug">
                       {video.title}
                     </h3>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <div className="flex items-center gap-2 text-[11px] text-white/30">
-                        <span className="flex items-center gap-1">
-                          <RiHardDrive2Line className="size-3" />
-                          {formatBytes(video.fileSizeBytes)}
-                        </span>
-                        <span className="text-white/10">·</span>
-                        <span>{new Date(video.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                      </div>
-                      <RiArrowRightSLine className={`size-3.5 text-white/15 transition-all duration-200 ${isHovered ? 'translate-x-0.5 text-white/40' : ''}`} />
+                    <div className="flex items-center gap-2 mt-1.5 text-[11px] text-white/30 font-medium">
+                      <span className="flex items-center gap-1">
+                        <RiHardDrive2Line className="size-3" />
+                        {formatBytes(video.fileSizeBytes)}
+                      </span>
+                      <span className="text-white/10">·</span>
+                      <span>{new Date(video.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     </div>
                   </div>
                 </div>

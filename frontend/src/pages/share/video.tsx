@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react"
 import { useParams } from "react-router-dom"
-import { RiPlayCircleFill, RiPlayCircleLine, RiHardDrive2Line, RiTimeLine } from "@remixicon/react"
+import { RiPlayCircleLine, RiHardDrive2Line, RiTimeLine } from "@remixicon/react"
 import { VideoPlayer } from "@/components/video-player"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatBytes, API_BASE_URL, formatDuration } from "@/lib/utils"
@@ -93,8 +93,8 @@ export function ShareVideo() {
         const json = await res.json()
         if (!res.ok) throw new Error(json.message || 'Failed to fetch video details')
         setData(json.data)
-      } catch (err: any) {
-        setError(err.message)
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred')
       } finally {
         setLoading(false)
       }
@@ -177,7 +177,7 @@ export function ShareVideo() {
     return () => {
       injectedElements.forEach(el => el.remove());
     };
-  }, [data?.ads]);
+  }, [data?.ads, data?.id]);
 
   const handleFirstPlay = () => {
     if (!data?.ads) return;
@@ -229,6 +229,9 @@ export function ShareVideo() {
           </div>
           <h2 className="text-lg font-semibold text-white">Video Unavailable</h2>
           <p className="text-sm text-white/40 max-w-sm">{error || 'This video could not be found or the link has expired.'}</p>
+          <a href="/" className="mt-4 px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors">
+            Go Home
+          </a>
         </div>
       </div>
     )
@@ -242,7 +245,7 @@ export function ShareVideo() {
       {/* Logo */}
       <header className="flex items-center h-14 px-5 md:px-8">
         <a href="/" className="flex items-center gap-2">
-          <RiPlayCircleFill className="size-5 text-emerald-500" />
+          <img src="/logo.webp" alt="vercelplay" className="size-5 shrink-0" />
           <span className="text-sm font-bold text-white tracking-tight">vercelplay</span>
         </a>
       </header>

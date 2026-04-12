@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
 import { api, ApiError } from "@/lib/api"
 import { useNavigate } from "react-router-dom"
@@ -21,11 +22,19 @@ import {
 export function DashboardSettings() {
   const { user, refreshUser, logout } = useAuth()
   const navigate = useNavigate()
-  
+
   const [name, setName] = useState(user?.name || "")
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null)
+
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState("")
+  const [passwordSuccess, setPasswordSuccess] = useState("")
 
   // Update local state if user context updates
   useEffect(() => {
@@ -54,6 +63,46 @@ export function DashboardSettings() {
     }
   }
 
+  const handleChangePassword = async () => {
+    // Validation
+    if (newPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters long")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match")
+      return
+    }
+
+    try {
+      setIsChangingPassword(true)
+      setPasswordError("")
+      setPasswordSuccess("")
+
+      await api.changePassword({
+        currentPassword,
+        newPassword
+      })
+
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setPasswordSuccess("Password changed successfully!")
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setPasswordSuccess(""), 3000)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setPasswordError(err.message)
+      } else {
+        setPasswordError("Failed to change password")
+      }
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
   const handleDelete = async () => {
     try {
       setIsDeleting(true)
@@ -71,14 +120,12 @@ export function DashboardSettings() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your personal information and account security.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage your account profile and security settings.
+        </p>
       </div>
 
       {message && (
@@ -86,28 +133,15 @@ export function DashboardSettings() {
           {message.text}
         </div>
       )}
-      
-      <div className="grid gap-6 md:grid-cols-[200px_1fr] lg:grid-cols-[250px_1fr]">
-        <nav className="flex flex-col gap-1 text-sm text-muted-foreground">
-          <a href="#" className="font-medium text-foreground px-3 py-2 bg-muted rounded-md">General</a>
-          <a href="#" className="px-3 py-2 hover:bg-muted/50 hover:text-foreground rounded-md transition-colors flex items-center justify-between">
-            Security 
-            <span className="text-[10px] uppercase bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold">Soon</span>
-          </a>
-          <a href="#" className="px-3 py-2 hover:bg-muted/50 hover:text-foreground rounded-md transition-colors flex items-center justify-between">
-            Billing
-            <span className="text-[10px] uppercase bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold">Soon</span>
-          </a>
-        </nav>
-
-        <div className="space-y-6">
+  
+      <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Display Name</CardTitle>
               <CardDescription>This is your visible name on the platform.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex max-w-md items-center gap-4">
+              <div className="flex items-center gap-4">
                 <Input 
                   type="text" 
                   placeholder="John Doe" 
@@ -133,8 +167,8 @@ export function DashboardSettings() {
             </CardHeader>
             <CardContent>
               <div className="max-w-md">
-                <Input 
-                  type="email" 
+                <Input
+                  type="email"
                   value={user?.email || ""}
                   disabled
                   className="bg-muted opacity-50 cursor-not-allowed"
@@ -143,6 +177,70 @@ export function DashboardSettings() {
                   Email addresses cannot be changed at this moment. You must create a new account.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>Update your account password to keep it secure.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => { e.preventDefault(); handleChangePassword(); }} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Current Password</Label>
+                  <Input
+                    id="current-password"
+                    type="password"
+                    placeholder="Enter current password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    disabled={isChangingPassword}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">New Password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    placeholder="Enter new password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={isChangingPassword}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Password must be at least 8 characters long.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm New Password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="Confirm new password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    disabled={isChangingPassword}
+                  />
+                </div>
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                  className="w-full"
+                >
+                  {isChangingPassword && <RiLoader4Line className="mr-2 size-4 animate-spin" />}
+                  Change Password
+                </Button>
+                {passwordError && (
+                  <p className="text-sm text-destructive">{passwordError}</p>
+                )}
+                {passwordSuccess && (
+                  <p className="text-sm text-green-600">{passwordSuccess}</p>
+                )}
+              </form>
             </CardContent>
           </Card>
 
@@ -184,6 +282,5 @@ export function DashboardSettings() {
           </Card>
         </div>
       </div>
-    </div>
   )
 }

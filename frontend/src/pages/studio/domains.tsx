@@ -88,8 +88,8 @@ export function StudioDomains() {
       }
       setIsDialogOpen(false)
       fetchDomains()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to save domain")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to save domain")
     } finally {
       setIsSaving(false)
     }
@@ -107,8 +107,8 @@ export function StudioDomains() {
       await adminApi.domains.delete(id)
       toast.success("Domain removed")
       fetchDomains()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to delete domain")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete domain")
     }
   }
 
@@ -118,8 +118,8 @@ export function StudioDomains() {
       await adminApi.domains.setDefault(id)
       toast.success("Default domain updated")
       fetchDomains()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to set default domain")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to set default domain")
     }
   }
 
@@ -129,8 +129,8 @@ export function StudioDomains() {
       await adminApi.domains.verify(id)
       toast.success("Domain verified and SSL activated")
       fetchDomains()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to verify domain")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to verify domain")
     }
   }
 

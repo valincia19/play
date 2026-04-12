@@ -8,7 +8,7 @@ import { logger } from '../../utils/logger'
 import { getBandwidthUsage } from '../../utils/bandwidth'
 import { videoQueue } from './processor'
 import { videoService } from './service'
-import { db, users } from '../../schema'
+import { db, users, videos } from '../../schema'
 import { eq } from 'drizzle-orm'
 
 const ALLOWED_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/webm']
@@ -289,6 +289,101 @@ export const videoRoutes = new Elysia({ prefix: '/videos' })
       }),
       title: t.Optional(t.String()),
       folderId: t.Optional(t.String()),
+      visibility: t.Optional(t.String()),
+      processingMode: t.Optional(t.Union([t.Literal('mp4'), t.Literal('hls')])),
+      qualities: t.Optional(t.Union([t.String(), t.Array(t.String())])),
+    }),
+  })
+
+  /**
+   * POST /videos/import — Import a remote video via URL (Leecher)
+   */
+  .post('/import', async ({ userId, body }) => {
+    const { url, title, folderId } = body
+    const videoId = crypto.randomUUID()
+
+    try {
+      // 1. Send HEAD request to remote URL to validate size and type
+      const abort = new AbortController()
+      const timeout = setTimeout(() => abort.abort(), 10000)
+      
+      let res: Response;
+      try {
+        res = await fetch(url, { method: 'HEAD', signal: abort.signal as any })
+      } catch (err) {
+        return error(errorCodes.INVALID_INPUT, 'Failed to fetch the remote URL. Check the URL and try again.')
+      } finally {
+        clearTimeout(timeout)
+      }
+
+      if (!res.ok) {
+        return error(errorCodes.INVALID_INPUT, `Remote server returned HTTP ${res.status}`)
+      }
+
+      const contentType = res.headers.get('content-type') || ''
+      
+      // Let's just blindly accept if it claims to be video or application/octet-stream
+      if (!contentType.includes('video/') && !contentType.includes('application/octet-stream') && !contentType.includes('binary')) {
+         logger.warn({ event: 'import_suspicious_content_type', url, contentType })
+      }
+
+      const sizeStr = res.headers.get('content-length')
+      if (!sizeStr) {
+        return error(errorCodes.INVALID_INPUT, 'Remote server did not return Content-Length, cannot determine file size.')
+      }
+
+      const fileSizeBytes = parseInt(sizeStr, 10)
+      if (fileSizeBytes > MAX_UPLOAD_SIZE) {
+        // Technically for proxy it doesn't matter, but let's prevent crazy things
+        logger.warn({ event: 'import_large_remote_file', url, sizeMB: Math.round(fileSizeBytes/1024/1024) })
+      }
+
+      // 2. Storage Quota is skipped since we aren't hosting the MP4 in S3,
+      // but we still allocate a bucket for storing the Thumbnail!
+      const bucket = await videoService.allocateBucket(1024 * 1024) // just 1MB estimation for thumbnail
+      const processingMode = 'mp4' // Force MP4 mode for remote proxy streams
+      
+      const fileKey = url // Save the exact URL in the DB
+
+      const visibility = (body.visibility || 'private') as 'private' | 'unlisted' | 'public'
+
+      const video = await videoService.createVideo({
+        id: videoId,
+        userId: userId!,
+        title: title || (url.split('/').pop()?.split('?')[0] || 'Imported Video'),
+        videoUrl: fileKey,
+        fileSizeBytes, // We save the size for analytics/bandwidth calculation 
+        folderId: folderId || null,
+        visibility,
+        isPrivate: visibility === 'private',
+        processingMode,
+        qualities: ['proxy'], // special flag or just standard
+        skipQueue: true,
+      }, bucket.id)
+
+      // 4. Update status to uploading immediately
+      await db.update(videos).set({ status: 'uploading' }).where(eq(videos.id, videoId))
+
+      // 5. Add to queue
+      await videoQueue.add('import-video', { videoId, remoteUrl: url }, { jobId: videoId, removeOnComplete: true })
+
+      return success({
+        videoId: video.id,
+        status: 'uploading',
+        processingMode: video.processingMode,
+        qualities: video.qualities,
+        fileSizeBytes: video.fileSizeBytes, // Pass back the detected size
+      })
+
+    } catch (err: any) {
+      logger.error({ event: 'import_prepare_failed', userId, error: err.message, stack: err.stack })
+      return error(errorCodes.INTERNAL_ERROR, 'Failed to import video')
+    }
+  }, {
+    body: t.Object({
+      url: t.String({ format: 'uri' }),
+      title: t.Optional(t.String()),
+      folderId: t.Optional(t.Nullable(t.String())),
       visibility: t.Optional(t.String()),
       processingMode: t.Optional(t.Union([t.Literal('mp4'), t.Literal('hls')])),
       qualities: t.Optional(t.Union([t.String(), t.Array(t.String())])),

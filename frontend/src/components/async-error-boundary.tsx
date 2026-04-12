@@ -1,4 +1,6 @@
-import React, { ReactNode, useState, useCallback } from 'react'
+/* eslint-disable react-refresh/only-export-components -- This module intentionally co-exports hooks alongside components for cohesive error handling */
+import React, { useState, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { RiAlertLine, RiLoader4Line, RiRefreshLine } from '@remixicon/react'
@@ -152,7 +154,7 @@ export function useAsync<T>(
 
     options.onError?.(lastError!)
     throw lastError
-  }, [asyncFn, options, options.maxRetries, options.retryDelay])
+  }, [asyncFn, options])
 
   // Auto-execute if immediate is true
   React.useEffect(() => {

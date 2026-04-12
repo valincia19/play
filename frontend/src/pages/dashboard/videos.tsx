@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -9,11 +9,12 @@ import { useLocation, useNavigate } from "react-router-dom"
 import { FolderBreadcrumb } from "@/components/dashboard/video/folder-breadcrumb"
 import { CreateFolderDialog } from "@/components/dashboard/video/create-folder-dialog"
 import { FolderGrid } from "@/components/dashboard/video/folder-grid"
+import type { Folder, FolderPath, Video } from "@/lib/types"
 
 export function DashboardVideos() {
-  const [folders, setFolders] = useState<any[]>([])
-  const [videos, setVideos] = useState<any[]>([])
-  const [path, setPath] = useState<any[]>([])
+  const [folders, setFolders] = useState<Folder[]>([])
+  const [videos, setVideos] = useState<Video[]>([])
+  const [path, setPath] = useState<FolderPath[]>([])
   const [loading, setLoading] = useState(true)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -26,7 +27,7 @@ export function DashboardVideos() {
   const queryParams = new URLSearchParams(location.search)
   const currentFolderId = queryParams.get("folderId") || undefined // Fixed to 'folderId'
 
-  const fetchContents = async () => {
+  const fetchContents = useCallback(async () => {
     try {
       setLoading(true)
       const [folderRes, videoRes] = await Promise.all([
@@ -38,7 +39,7 @@ export function DashboardVideos() {
       setPath(folderRes.path || [])
       setVideos(videoRes.videos || [])
       setHasMore(videoRes.hasMore)
-    } catch (err: any) {
+    } catch {
       toast.error('Directory unavailable or removed')
       if (currentFolderId) {
         navigate('/dashboard/videos', { replace: true })
@@ -46,7 +47,7 @@ export function DashboardVideos() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentFolderId, navigate])
 
   const loadMore = async () => {
     if (loadingMore || !hasMore) return
@@ -64,7 +65,7 @@ export function DashboardVideos() {
 
   useEffect(() => {
     fetchContents()
-  }, [currentFolderId])
+  }, [fetchContents])
 
   return (
     <div className="space-y-6">
@@ -90,7 +91,7 @@ export function DashboardVideos() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div className="flex items-center space-x-2">
-            <FolderBreadcrumb currentFolderId={currentFolderId} path={path} />
+            <FolderBreadcrumb currentFolderId={currentFolderId} path={path.map((p, i) => ({ ...p, depth: i }))} />
           </div>
         </CardHeader>
         <CardContent>

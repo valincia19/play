@@ -1,5 +1,4 @@
 import {
-  RiPlayCircleFill,
   RiGithubFill,
   RiTwitterXFill,
 } from "@remixicon/react"
@@ -13,7 +12,7 @@ export function Footer() {
           {/* Brand & Description */}
           <div className="md:col-span-1 lg:col-span-2">
             <Link to="/" className="flex items-center gap-2">
-              <RiPlayCircleFill className="size-5 text-primary" />
+              <img src="/logo.webp" alt="Vercelplay" className="size-5 shrink-0" />
               <span className="text-base font-semibold tracking-tight">
                 Vercelplay
               </span>

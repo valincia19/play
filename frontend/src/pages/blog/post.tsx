@@ -14,7 +14,6 @@ export function BlogPostPage() {
 
   useEffect(() => {
     if (!slug) return
-    setIsLoading(true)
     blogApi.getPost(slug)
       .then(setPost)
       .catch(() => setNotFound(true))

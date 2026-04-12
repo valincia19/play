@@ -13,6 +13,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { adsApi } from "@/lib/api"
 
+interface AdConfig {
+  id?: string
+  provider: string
+  adType: string
+  adCode: string
+  isActive: boolean
+}
+
 export function DashboardAds() {
   const [provider, setProvider] = useState("adsterra")
   const [adType, setAdType] = useState("smart_link")
@@ -20,7 +28,7 @@ export function DashboardAds() {
   const [adCode, setAdCode] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [allConfigs, setAllConfigs] = useState<any[]>([])
+  const [allConfigs, setAllConfigs] = useState<AdConfig[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   useEffect(() => {
@@ -65,7 +73,7 @@ export function DashboardAds() {
         if (!url.hostname.includes('profitablecpm') && !url.hostname.includes('network.com')) {
           toast.warning("Warning: That doesn't look like a standard Adsterra Smart Link.", { duration: 6000 })
         }
-      } catch (e) {
+      } catch {
         toast.error("Please enter a valid URL format.")
         return;
       }
@@ -75,7 +83,7 @@ export function DashboardAds() {
         if (!url.hostname.includes('omg10.com') && !url.hostname.includes('monetag')) {
           toast.warning("Tip: Monetag Direct Links often contain 'omg10.com'.", { duration: 6000 })
         }
-      } catch (e) {
+      } catch {
         toast.error("Please enter a valid URL format.")
         return;
       }
@@ -90,7 +98,7 @@ export function DashboardAds() {
       })
       toast.success("Ad configuration saved successfully!")
       setIsDialogOpen(false)
-    } catch (e) {
+    } catch {
       toast.error("Failed to save ad configuration")
     } finally {
       setIsSaving(false)
@@ -128,8 +136,8 @@ export function DashboardAds() {
             Create Campaign
           </Button>
 
-          <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-primary/10 shadow-2xl">
-            <DialogHeader className="p-8 bg-muted/40 border-b text-left">
+          <DialogContent className="sm:max-w-[600px] w-[calc(100vw-2rem)] max-h-[90dvh] overflow-hidden flex flex-col p-0 border-primary/10 shadow-2xl">
+            <DialogHeader className="p-4 sm:p-8 bg-muted/40 border-b text-left shrink-0">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-primary/10 rounded-xl">
                   <RiAdvertisementLine className="size-6 text-primary" />
@@ -141,7 +149,7 @@ export function DashboardAds() {
               </div>
             </DialogHeader>
             
-            <div className="p-8 space-y-8">
+            <div className="p-4 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto custom-scrollbar">
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-2.5">
                   <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ad Provider</Label>
@@ -221,9 +229,9 @@ export function DashboardAds() {
               </div>
             </div>
 
-            <DialogFooter className="bg-muted/40 p-8 border-t">
-              <Button variant="ghost" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>Cancel</Button>
-              <Button size="lg" onClick={handleSave} disabled={isSaving} className="px-8 shadow-md">
+            <DialogFooter className="bg-muted/40 p-4 sm:p-8 border-t flex flex-col-reverse sm:flex-row gap-2 sm:gap-2 shrink-0">
+              <Button variant="ghost" className="w-full sm:w-auto" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>Cancel</Button>
+              <Button size="lg" onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto px-8 shadow-md">
                 {isSaving ? <RiLoader4Line className="mr-2 size-4 animate-spin" /> : <RiSave3Line className="mr-2 size-4" />}
                 Save Changes
               </Button>
@@ -234,7 +242,7 @@ export function DashboardAds() {
 
       <div className="grid gap-8 lg:grid-cols-12 items-start">
         {/* Main Column - Table */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="lg:col-span-8 space-y-6 min-w-0">
           <div className="flex items-center gap-3 px-1">
             <div className="p-2 bg-primary/10 rounded-lg">
               <RiGlobalLine className="size-5 text-primary" />
@@ -243,52 +251,53 @@ export function DashboardAds() {
           </div>
           
           <Card className="overflow-hidden border-primary/10 bg-background/50 backdrop-blur-md shadow-2xl">
-            <Table>
+            <div className="overflow-x-auto custom-scrollbar">
+              <Table className="min-w-[700px] w-full">
               <TableHeader className="bg-muted/50 border-b border-border/50">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[160px] text-[11px] font-black uppercase tracking-[0.1em] text-muted-foreground py-5 px-6">Network</TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.1em] text-muted-foreground py-5">Format</TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.1em] text-muted-foreground py-5">Integration Link</TableHead>
-                  <TableHead className="w-[120px] text-[11px] font-black uppercase tracking-[0.1em] text-muted-foreground py-5 text-center">Status</TableHead>
-                  <TableHead className="w-[80px] text-[11px] font-black uppercase tracking-[0.1em] text-muted-foreground py-5 text-right px-6">Actions</TableHead>
+                  <TableHead className="w-[160px] text-xs font-semibold uppercase tracking-wider text-muted-foreground py-4 px-6">Network</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground py-4">Format</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground py-4">Integration Link</TableHead>
+                  <TableHead className="w-[120px] text-xs font-semibold uppercase tracking-wider text-muted-foreground py-4 text-center">Status</TableHead>
+                  <TableHead className="w-[80px] text-xs font-semibold uppercase tracking-wider text-muted-foreground py-4 text-right px-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {allConfigs.length > 0 ? (
                   allConfigs.map((cfg, idx) => (
                     <TableRow key={idx} className="group hover:bg-primary/[0.02] transition-colors border-border/40">
-                      <TableCell className="py-6 px-6">
+                      <TableCell className="py-4 px-6">
                         <div className="flex items-center gap-3">
                           <div className={`p-2 rounded-xl transition-colors ${cfg.isActive ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-muted border border-border/50'}`}>
                             <RiGlobalLine className={`size-4 ${cfg.isActive ? "text-emerald-500" : "text-muted-foreground"}`} />
                           </div>
-                          <span className="font-bold text-sm tracking-tight capitalize">{cfg.provider}</span>
+                          <span className="font-semibold text-sm tracking-tight capitalize">{cfg.provider}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="py-6">
-                        <Badge variant="secondary" className="bg-primary/5 text-primary border border-primary/10 capitalize text-[10px] font-bold px-2 py-1 rounded-md">
+                      <TableCell className="py-4">
+                        <Badge variant="secondary" className="bg-primary/5 text-primary border border-primary/10 capitalize text-[10px] font-semibold px-2 py-1 rounded-md">
                           {cfg.adType.replace('_', ' ')}
                         </Badge>
                       </TableCell>
-                      <TableCell className="py-6">
-                        <div className="max-w-[280px] lg:max-w-[320px] truncate font-mono text-[10px] text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg border border-border/20 group-hover:border-primary/20 transition-all">
+                      <TableCell className="py-4">
+                        <div className="max-w-[280px] lg:max-w-[320px] truncate font-mono text-xs text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg border border-border/20 group-hover:border-primary/20 transition-all">
                           {cfg.adCode}
                         </div>
                       </TableCell>
-                      <TableCell className="py-6 text-center">
+                      <TableCell className="py-4 text-center">
                         {cfg.isActive ? (
                           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shadow-sm shadow-emerald-500/5">
                             <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-[10px] font-black uppercase tracking-wider">Active</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider">Active</span>
                           </div>
                         ) : (
                           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground border border-border/50">
                             <div className="size-1.5 rounded-full bg-muted-foreground/50" />
-                            <span className="text-[10px] font-black uppercase tracking-wider">Paused</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider">Paused</span>
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="py-6 text-right px-6">
+                      <TableCell className="py-4 text-right px-6">
                         <Button 
                           variant="outline" 
                           size="icon" 
@@ -318,11 +327,12 @@ export function DashboardAds() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </Card>
         </div>
 
         {/* Sidebar Column */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-6 min-w-0">
           <div className="flex items-center gap-3 px-1">
             <div className="p-2 bg-primary/10 rounded-lg">
               <RiAddLine className="size-5 text-primary" />

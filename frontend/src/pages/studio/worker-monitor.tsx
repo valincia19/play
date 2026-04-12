@@ -46,8 +46,8 @@ export function StudioWorkerMonitor() {
     try {
       const res = await adminApi.cleanupStorage()
       toast.success(`Success! Deleted ${res.deletedItems} items, freeing ${res.mbFreed} MB.`, { id: tId })
-    } catch (err: any) {
-      toast.error(err.message || "Failed to cleanup storage orphans", { id: tId })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to cleanup storage orphans", { id: tId })
     } finally {
       setIsCleaning(false)
     }

@@ -4,7 +4,6 @@ import {
   RiVideoLine, 
   RiAdvertisementLine, 
   RiSettings4Line,
-  RiPlayCircleFill,
   RiBarChartBoxLine,
   RiShieldStarLine,
   RiFlashlightLine
@@ -66,7 +65,7 @@ export function Sidebar({ className, isMobile }: { className?: string; isMobile?
   return (
     <aside className={cn("flex flex-col border-r border-border bg-background h-full", className)}>
       <div className={cn("flex h-14 items-center gap-2 border-b border-border/50", isMobile ? "px-6" : "px-4 lg:px-6 justify-center lg:justify-start")}>
-        <RiPlayCircleFill className="size-5 text-primary shrink-0" />
+        <img src="/logo.webp" alt="Vercelplay" className="size-5 shrink-0" />
         <span className={cn("text-sm font-semibold tracking-tight", !isMobile && "hidden lg:block")}>
           Vercelplay
         </span>

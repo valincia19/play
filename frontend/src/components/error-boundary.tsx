@@ -1,4 +1,6 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react'
+/* eslint-disable react-refresh/only-export-components -- Exports class boundary + HOC + hook as unified error handling API */
+import React, { Component } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { RiAlertLine, RiRefreshLine, RiHomeLine } from '@remixicon/react'
@@ -76,7 +78,7 @@ export class ErrorBoundary extends Component<Props, State> {
         stack: error.stack
       },
       componentStack: errorInfo.componentStack,
-      digest: errorInfo.digest
+      // digest: errorInfo.digest // Property doesn't exist on ErrorInfo
     })
 
     // Call custom error handler if provided
@@ -145,7 +147,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render(): ReactNode {
     const { hasError, error, errorId } = this.state
-    const { children, fallback, isolate } = this.props
+    const { children, fallback } = this.props
 
     if (!hasError) {
       return children

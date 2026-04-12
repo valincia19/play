@@ -17,6 +17,26 @@ import { RiPlayCircleFill, RiLoader4Fill, RiErrorWarningFill, RiTimeLine, RiShar
 import { Textarea } from "@/components/ui/textarea"
 import { cn, API_BASE_URL, formatBytes, formatDuration } from "@/lib/utils"
 
+// ─── Micro Components for Performance ─────────────────────────────
+function InlineRenameInput({ initialValue, onSave, onCancel }: { initialValue: string, onSave: (val: string) => void, onCancel: () => void }) {
+  const [value, setValue] = useState(initialValue)
+  return (
+    <div className="flex-1 flex px-1" onClick={(e) => e.stopPropagation()}>
+      <Input
+        autoFocus
+        className="h-7 text-sm"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSave(value)
+          if (e.key === 'Escape') onCancel()
+        }}
+        onBlur={() => onSave(value)}
+      />
+    </div>
+  )
+}
+
 // ─── Type Definitions ─────────────────────────────────────────────
 
 interface Folder {
@@ -90,21 +110,14 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
 
   // Rename Inline State
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState("")
 
-  const startRename = (id: string, name: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setEditingId(id)
-    setEditName(name)
-  }
-
-  const submitRename = async (id: string) => {
-    if (!editName.trim()) {
+  const submitRename = async (id: string, newName: string) => {
+    if (!newName.trim()) {
       setEditingId(null)
       return
     }
     try {
-      await folderApi.rename(id, editName)
+      await folderApi.rename(id, newName)
       toast.success("Folder renamed successfully")
       setEditingId(null)
       if (onRefresh) onRefresh()
@@ -170,8 +183,8 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
       toast.success("Video updated successfully")
       if (onRefresh) onRefresh()
       setEditVideo(null)
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update video')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update video')
     } finally {
       setIsUpdatingVideo(false)
     }
@@ -192,8 +205,8 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
       toast.success("Folder updated successfully")
       if (onRefresh) onRefresh()
       setEditFolder(null)
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update folder')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update folder')
     } finally {
       setIsUpdatingFolder(false)
     }
@@ -268,7 +281,6 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
 
   // Bulk Visibility State
   const [isBulkVisibilityOpen, setIsBulkVisibilityOpen] = useState(false)
-  const [bulkVisibilityValue, setBulkVisibilityValue] = useState<'private' | 'unlisted' | 'public'>('private')
   const [isBulkUpdating, setIsBulkUpdating] = useState(false)
 
   const handleBulkVisibility = async (visibility: 'private' | 'unlisted' | 'public') => {
@@ -285,8 +297,8 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
       toast.success(`${selectedIds.size} item${selectedIds.size > 1 ? 's' : ''} set to ${visibility}`)
       setSelectedIds(new Set())
       if (onRefresh) onRefresh()
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update visibility')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update visibility')
     } finally {
       setIsBulkUpdating(false)
       setIsBulkVisibilityOpen(false)
@@ -414,19 +426,11 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
                 <RiFolder3Fill className="size-5 text-primary/80 transition-colors" />
 
                 {editingId === folder.id ? (
-                  <div className="flex-1 flex" onClick={(e) => e.stopPropagation()}>
-                    <Input
-                      autoFocus
-                      className="h-7 text-sm"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') submitRename(folder.id)
-                        if (e.key === 'Escape') setEditingId(null)
-                      }}
-                      onBlur={() => submitRename(folder.id)}
-                    />
-                  </div>
+                  <InlineRenameInput
+                    initialValue={folder.name}
+                    onSave={(val) => submitRename(folder.id, val)}
+                    onCancel={() => setEditingId(null)}
+                  />
                 ) : (
                   <span className="font-medium truncate flex-1 flex items-center gap-2">
                     {folder.name}
@@ -464,7 +468,7 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
                       }}>Share</DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => {
                         e.stopPropagation()
-                        setEditFolder({ id: folder.id, name: folder.name, visibility: (folder as any).visibility || 'private' })
+                        setEditFolder({ id: folder.id, name: folder.name, visibility: folder.visibility || 'private' })
                       }}>Edit Settings</DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmMove([folder.id]) }}>Move</DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={(e) => {
@@ -754,7 +758,7 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
                 <label className="text-sm font-medium">Visibility</label>
                 <Select
                   value={editVideo.visibility}
-                  onValueChange={(val: any) => setEditVideo({ ...editVideo, visibility: val })}
+                  onValueChange={(val: string) => setEditVideo({ ...editVideo, visibility: val as 'private' | 'unlisted' | 'public' })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -800,7 +804,7 @@ export function FolderGrid({ folders, videos, hasMore, loadingMore, onLoadMore, 
                 <label className="text-sm font-medium">Visibility</label>
                 <Select
                   value={editFolder.visibility}
-                  onValueChange={(val: any) => setEditFolder({ ...editFolder, visibility: val })}
+                  onValueChange={(val: string) => setEditFolder({ ...editFolder, visibility: val as 'private' | 'unlisted' | 'public' })}
                 >
                   <SelectTrigger>
                     <SelectValue />

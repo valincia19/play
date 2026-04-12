@@ -1,7 +1,7 @@
 import { logger } from './utils/logger'
 import { redisManager } from './utils/redis'
-import { db, videos } from './schema'
-import { eq, sql } from 'drizzle-orm'
+import { db, videos, trackingEvents } from './schema'
+import { eq, sql, and } from 'drizzle-orm'
 import { Worker } from 'bullmq'
 import os from 'os'
 import { loadWorkerRuntimeConfig } from './config/runtime'
@@ -67,6 +67,69 @@ async function processViewsBatch() {
   }
 }
 
+async function processTrackingBatch() {
+  try {
+    const rawEvents = await redisManager.lpop('queue:tracking', 500)
+    if (!rawEvents || rawEvents.length === 0) return
+
+    const inserts: any[] = []
+    const progressUpdates: Record<string, any> = {}
+
+    for (const event of rawEvents) {
+      if (event.eventType === 'watch_progress') {
+        const key = `${event.sessionId}:${event.videoId}`
+        progressUpdates[key] = event
+      } else {
+        inserts.push({
+          videoId: event.videoId,
+          eventType: event.eventType,
+          sessionId: event.sessionId,
+          viewerFingerprint: event.viewerFingerprint,
+          metadata: event.metadata,
+        })
+      }
+    }
+
+    // 1. Bulk Inserts (Views & Impressions)
+    if (inserts.length > 0) {
+      await db.insert(trackingEvents).values(inserts).onConflictDoNothing()
+    }
+
+    // 2. Individual Updates (Watch Progress)
+    // We update the latest progress for each session+video pair in the batch
+    for (const event of Object.values(progressUpdates)) {
+      const existing = await db.select({ id: trackingEvents.id }).from(trackingEvents)
+        .where(and(
+          eq(trackingEvents.sessionId, event.sessionId),
+          eq(trackingEvents.eventType, event.eventType)
+        ))
+        .limit(1)
+
+      if (existing.length > 0) {
+        await db.update(trackingEvents).set({
+          metadata: event.metadata,
+          createdAt: new Date()
+        }).where(eq(trackingEvents.id, existing[0]!.id))
+      } else {
+        await db.insert(trackingEvents).values({
+          videoId: event.videoId,
+          eventType: 'watch_progress',
+          sessionId: event.sessionId,
+          viewerFingerprint: event.viewerFingerprint,
+          metadata: event.metadata
+        }).onConflictDoNothing()
+      }
+    }
+
+    logger.info({
+      event: 'cron_processed_tracking',
+      data: { ingestedLength: rawEvents.length, progressUpdates: Object.keys(progressUpdates).length }
+    })
+  } catch (err: any) {
+    logger.error({ event: 'cron_tracking_error', message: err.message })
+  }
+}
+
 export async function runWorkerApp() {
   await updateWorkerHeartbeat()
 
@@ -95,6 +158,22 @@ export async function runWorkerApp() {
         attemptsMade: job.attemptsMade,
       })
       await VideoProcessor.processVideo(videoId)
+    } else if (job.name === 'import-video') {
+      const { videoId, remoteUrl } = job.data
+      
+      const [video] = await db.select({ userId: videos.userId }).from(videos).where(eq(videos.id, videoId)).limit(1)
+      
+      logger.info({
+        event: 'job_started',
+        jobId: job.id,
+        name: job.name,
+        videoId,
+        userId: video?.userId,
+        remoteUrl,
+        attemptsMade: job.attemptsMade,
+      })
+      
+      await VideoProcessor.importVideo(videoId, remoteUrl)
     }
   }, {
     connection: redisManager.duplicate(),
@@ -217,6 +296,7 @@ export async function runWorkerApp() {
   setInterval(async () => {
     try {
       await processViewsBatch()
+      await processTrackingBatch()
     } catch (err: any) {
       logger.error({ event: 'views_batch_error', error: err.message, stack: err.stack })
     }

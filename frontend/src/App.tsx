@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom"
+import { useEffect } from "react"
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom"
 import { AuthProvider } from "@/contexts/auth-context"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -36,6 +37,43 @@ import { StudioWorkerMonitor } from "@/pages/studio/worker-monitor"
 import { StudioBlog } from "@/pages/studio/blog"
 import { StudioDomains } from "@/pages/studio/domains"
 
+function DomainRedirector() {
+  const location = useLocation()
+
+  useEffect(() => {
+    const hostname = window.location.hostname
+    
+    // Ambil configurasi domain dari file .env
+    const shareDomain = import.meta.env.VITE_SHARE_DOMAIN
+    const mainDomain = import.meta.env.VITE_MAIN_DOMAIN
+    
+    if (!shareDomain || !mainDomain) return
+
+    // Cek domain mana yang sedang diakses
+    const isShareDomain = hostname === shareDomain || hostname === `www.${shareDomain}`
+    const isMainDomain = hostname === mainDomain || hostname === `www.${mainDomain}`
+    
+    // Izinkan path untuk video, folder, API proxy (/v/), stream, atau preview
+    const validSharePaths = ['/d/', '/f/', '/v/']
+    const isSharePath = validSharePaths.some(p => location.pathname.startsWith(p))
+    
+    const protocol = window.location.protocol
+
+    if (isShareDomain && !isSharePath) {
+      // 1. Jika di domain verply.net TAPI mengakses selain share link (misal /dashboard) 
+      // -> Tendang user ke vercelplay.com/dashboard
+      const redirectPath = location.pathname === '/' ? '' : location.pathname
+      window.location.replace(`${protocol}//${mainDomain}${redirectPath}${location.search}`)
+    } else if (isMainDomain && isSharePath) {
+      // 2. Jika di domain vercelplay.com TAPI mengakses share link (/d/, /f/) 
+      // -> Tendang user ke verply.net/d/...
+      window.location.replace(`${protocol}//${shareDomain}${location.pathname}${location.search}`)
+    }
+  }, [location.pathname, location.search])
+
+  return null
+}
+
 export function App() {
   return (
     <ErrorBoundary
@@ -52,6 +90,7 @@ export function App() {
       }}
     >
       <Router>
+        <DomainRedirector />
         <AuthProvider>
         <Routes>
           {/* Public Share Routes */}

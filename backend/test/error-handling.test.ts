@@ -4,7 +4,7 @@
  * Comprehensive test suite for enhanced error handling features
  */
 
-import { describe, test, expect, beforeEach, jest } from '@jest/globals'
+import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals'
 import {
   AppError,
   ValidationError,
@@ -94,14 +94,14 @@ describe('Retry Logic', () => {
   })
 
   test('should succeed on first attempt', async () => {
-    const fn = jest.fn().mockResolvedValue('success')
+    const fn = jest.fn<() => Promise<string>>().mockResolvedValue('success')
     const result = await withRetry(fn)
     expect(result).toBe('success')
     expect(fn).toHaveBeenCalledTimes(1)
   })
 
   test('should retry on retryable errors', async () => {
-    const fn = jest.fn()
+    const fn = jest.fn<() => Promise<string>>()
       .mockRejectedValueOnce(new ExternalServiceError('S3', 'Timeout'))
       .mockResolvedValue('success')
 
@@ -111,7 +111,7 @@ describe('Retry Logic', () => {
   })
 
   test('should not retry non-retryable errors', async () => {
-    const fn = jest.fn().mockRejectedValue(new ValidationError('Invalid input'))
+    const fn = jest.fn<() => Promise<never>>().mockRejectedValue(new ValidationError('Invalid input'))
 
     await expect(withRetry(fn, { maxAttempts: 3 }))
       .rejects.toThrow('Invalid input')
@@ -119,7 +119,7 @@ describe('Retry Logic', () => {
   })
 
   test('should exhaust retries after max attempts', async () => {
-    const fn = jest.fn().mockRejectedValue(new ExternalServiceError('S3', 'Connection failed'))
+    const fn = jest.fn<() => Promise<never>>().mockRejectedValue(new ExternalServiceError('S3', 'Connection failed'))
 
     await expect(withRetry(fn, { maxAttempts: 2, initialDelayMs: 100 }))
       .rejects.toThrow('Connection failed')
@@ -130,12 +130,10 @@ describe('Retry Logic', () => {
     const delays: number[] = []
     const originalSetTimeout = global.setTimeout
 
-    global.setTimeout = jest.fn().mockImplementation((fn, delay) => {
-      delays.push(delay)
-      return originalSetTimeout(fn, delay)
-    })
+    const timeoutMock = jest.fn<typeof setTimeout>()
+    global.setTimeout = timeoutMock as any
 
-    const fn = jest.fn()
+    const fn = jest.fn<() => Promise<string>>()
       .mockRejectedValueOnce(new ExternalServiceError('S3', 'Timeout'))
       .mockRejectedValueOnce(new ExternalServiceError('S3', 'Timeout'))
       .mockResolvedValue('success')
@@ -229,7 +227,7 @@ describe('Circuit Breaker', () => {
       timeoutMs: 1000
     })
 
-    const failingFn = jest.fn().mockRejectedValue(new Error('Service failure'))
+    const failingFn = jest.fn<() => Promise<never>>().mockRejectedValue(new Error('Service failure'))
 
     // First failure
     await expect(breaker.execute(failingFn)).rejects.toThrow()
@@ -246,7 +244,7 @@ describe('Circuit Breaker', () => {
       timeoutMs: 1000
     })
 
-    const failingFn = jest.fn().mockRejectedValue(new Error('Service failure'))
+    const failingFn = jest.fn<() => Promise<never>>().mockRejectedValue(new Error('Service failure'))
 
     // Open the circuit
     await expect(breaker.execute(failingFn)).rejects.toThrow()
@@ -265,7 +263,7 @@ describe('Circuit Breaker', () => {
       timeoutMs: 1000
     })
 
-    const failingFn = jest.fn().mockRejectedValue(new Error('Service failure'))
+    const failingFn = jest.fn<() => Promise<never>>().mockRejectedValue(new Error('Service failure'))
 
     // Open the circuit
     await expect(breaker.execute(failingFn)).rejects.toThrow()
@@ -287,8 +285,8 @@ describe('Circuit Breaker', () => {
       timeoutMs: 1000
     })
 
-    const failingFn = jest.fn().mockRejectedValue(new Error('Service failure'))
-    const successFn = jest.fn().mockResolvedValue('success')
+    const failingFn = jest.fn<() => Promise<never>>().mockRejectedValue(new Error('Service failure'))
+    const successFn = jest.fn<() => Promise<string>>().mockResolvedValue('success')
 
     // Open the circuit
     await expect(breaker.execute(failingFn)).rejects.toThrow()
@@ -310,8 +308,8 @@ describe('Circuit Breaker', () => {
       successThreshold: 2
     })
 
-    const successFn = jest.fn().mockResolvedValue('success')
-    const failingFn = jest.fn().mockRejectedValue(new Error('Service failure'))
+    const successFn = jest.fn<() => Promise<string>>().mockResolvedValue('success')
+    const failingFn = jest.fn<() => Promise<never>>().mockRejectedValue(new Error('Service failure'))
 
     // Mix of success and failure
     await breaker.execute(successFn)
@@ -329,7 +327,7 @@ describe('Circuit Breaker', () => {
       failureThreshold: 1
     })
 
-    const failingFn = jest.fn().mockRejectedValue(new Error('Service failure'))
+    const failingFn = jest.fn<() => Promise<never>>().mockRejectedValue(new Error('Service failure'))
 
     // Open the circuit
     await expect(breaker.execute(failingFn)).rejects.toThrow()

@@ -37,17 +37,77 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 
 
+interface AnalyticsOverview {
+  totalViews: number
+  totalAdImpressions: number
+  totalUniqueSessions: number
+  totalStorage: number
+  totalBandwidth: number
+}
+
+interface ViewsDaily {
+  date: string
+  views: number
+  uniques: number
+}
+
+interface RetentionData {
+  completionRate: number
+  avgWatchDuration: number
+}
+
+interface AudienceEntry {
+  device?: string
+  browser?: string
+  country?: string
+  count: number
+}
+
+interface AudienceData {
+  devices: AudienceEntry[]
+  browsers: AudienceEntry[]
+  countries: AudienceEntry[]
+}
+
+interface AdDailyEntry {
+  date: string
+  impressions: number
+}
+
+interface AdProviderEntry {
+  provider: string
+  count: string | number
+}
+
+interface AdTypeEntry {
+  type: string
+  count: string | number
+}
+
+interface AdsAnalytics {
+  daily?: AdDailyEntry[]
+  providers?: AdProviderEntry[]
+  types?: AdTypeEntry[]
+}
+
+interface TopVideo {
+  id: string
+  title: string
+  views: number
+  fileSizeBytes: number
+}
+
 export function DashboardAnalytics() {
   const [date, setDate] = useState<DateRange | undefined>({
     from: subDays(new Date(), 7),
     to: new Date()
   })
-  const [overview, setOverview] = useState<any>(null)
-  const [viewsData, setViewsData] = useState<any[]>([])
-  const [adsData, setAdsData] = useState<any>(null)
-  const [topVideos, setTopVideos] = useState<any[]>([])
-  const [retention, setRetention] = useState<any>(null)
-  const [audience, setAudience] = useState<any>(null)
+  const [overview, setOverview] = useState<AnalyticsOverview | null>(null)
+  const [viewsData, setViewsData] = useState<ViewsDaily[]>([])
+  const [adsData, setAdsData] = useState<AdsAnalytics | null>(null)
+  const [topVideos, setTopVideos] = useState<TopVideo[]>([])
+  const [retention, setRetention] = useState<RetentionData | null>(null)
+  const [audience, setAudience] = useState<AudienceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [ecpm, setEcpm] = useState<number>(1.50)
 
@@ -60,14 +120,14 @@ export function DashboardAnalytics() {
         const dateQuery = fromStr ? `?from=${fromStr}&to=${toStr}` : ''
 
         const [ov, vw, ad, vd] = await Promise.all([
-          api.get<any>(`/analytics/overview${dateQuery}`),
-          api.get<any>(`/analytics/views${dateQuery}`),
-          api.get<any>(`/analytics/ads${dateQuery}`),
-          api.get<any>(`/analytics/videos${dateQuery}`)
+          api.get<AnalyticsOverview>(`/analytics/overview${dateQuery}`),
+          api.get<{ daily?: ViewsDaily[]; retention?: RetentionData; devices?: AudienceEntry[]; browsers?: AudienceEntry[]; countries?: AudienceEntry[] }>(`/analytics/views${dateQuery}`),
+          api.get<AdsAnalytics>(`/analytics/ads${dateQuery}`),
+          api.get<TopVideo[]>(`/analytics/videos${dateQuery}`)
         ])
         setOverview(ov)
         setViewsData(vw?.daily || (Array.isArray(vw) ? vw : []))
-        setRetention(vw?.retention)
+        setRetention(vw?.retention || null)
         setAudience({ devices: vw?.devices || [], browsers: vw?.browsers || [], countries: vw?.countries || [] })
         setAdsData(ad)
         setTopVideos(Array.isArray(vd) ? vd : [])
@@ -197,7 +257,7 @@ export function DashboardAnalytics() {
         const monRate = overview?.totalUniqueSessions ? overview.totalAdImpressions / overview.totalUniqueSessions : 0;
         const compRate = retention?.completionRate || 0;
 
-        if (overview?.totalViews > 100 && (monRate < 0.5 || compRate < 10)) {
+        if ((overview?.totalViews || 0) > 100 && (monRate < 0.5 || compRate < 10)) {
           return (
             <Alert variant="destructive" className="bg-rose-500/10 text-rose-600 border-rose-500/20">
               <RiErrorWarningLine className="size-4" />
@@ -259,8 +319,8 @@ export function DashboardAnalytics() {
         
         <StatCard title="Avg Watch Time" value={formatTime(retention?.avgWatchDuration || 0)} icon={<RiTimeLine />} />
         <StatCard title="Completion Rate" value={`${(retention?.completionRate || 0).toFixed(1)}%`} icon={<RiFocus2Line />} />
-        <StatCard title="Storage" value={formatBytes(overview?.totalStorage)} icon={<RiHardDrive2Line />} />
-        <StatCard title="Est. Bandwidth" value={formatBytes(overview?.totalBandwidth)} icon={<RiDownloadCloud2Line />} />
+        <StatCard title="Storage" value={formatBytes(overview?.totalStorage || 0)} icon={<RiHardDrive2Line />} />
+        <StatCard title="Est. Bandwidth" value={formatBytes(overview?.totalBandwidth || 0)} icon={<RiDownloadCloud2Line />} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -305,7 +365,7 @@ export function DashboardAnalytics() {
           </CardHeader>
           <CardContent className="pt-4">
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={adsData?.daily?.map((d: any) => ({ ...d, revenue: (d.impressions * ecpm / 1000).toFixed(2) })) || []}>
+              <ComposedChart data={adsData?.daily?.map((d: AdDailyEntry) => ({ ...d, revenue: (d.impressions * ecpm / 1000).toFixed(2) })) || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
@@ -336,13 +396,13 @@ export function DashboardAnalytics() {
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie
-                  data={adsData?.providers?.map((p: any) => ({ name: p.provider || 'Others', value: Number(p.count) })) || []}
+                  data={adsData?.providers?.map((p: AdProviderEntry) => ({ name: p.provider || 'Others', value: Number(p.count) })) || []}
                   innerRadius={60}
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {adsData?.providers?.map((_: any, index: number) => (
+                  {adsData?.providers?.map((_: AdProviderEntry, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -350,11 +410,11 @@ export function DashboardAnalytics() {
               </PieChart>
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-4 w-full px-4 mt-4">
-              {adsData?.providers?.map((p: any, i: number) => (
+              {adsData?.providers?.map((p: AdProviderEntry, i: number) => (
                 <div key={p.provider} className="flex items-center gap-2">
                   <div className="size-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                   <span className="text-xs font-medium capitalize truncate">{p.provider || 'Others'}</span>
-                  <span className="text-[10px] text-muted-foreground ml-auto">{((Number(p.count)/overview?.totalAdImpressions)*100).toFixed(0)}%</span>
+                  <span className="text-[10px] text-muted-foreground ml-auto">{((Number(p.count)/(overview?.totalAdImpressions || 1))*100).toFixed(0)}%</span>
                 </div>
               ))}
             </div>
@@ -372,13 +432,13 @@ export function DashboardAnalytics() {
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie
-                  data={adsData?.types?.map((p: any) => ({ name: p.type || 'Unknown', value: Number(p.count) })) || []}
+                  data={adsData?.types?.map((p: AdTypeEntry) => ({ name: (p.type || 'Unknown').replace(/_/g, ' '), value: Number(p.count) })) || []}
                   innerRadius={60}
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {adsData?.types?.map((_: any, index: number) => (
+                  {adsData?.types?.map((_: AdTypeEntry, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
                   ))}
                 </Pie>
@@ -386,10 +446,10 @@ export function DashboardAnalytics() {
               </PieChart>
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-4 w-full px-4 mt-4">
-              {adsData?.types?.map((p: any, i: number) => (
+              {adsData?.types?.map((p: AdTypeEntry, i: number) => (
                 <div key={p.type} className="flex items-center gap-2">
                   <div className="size-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[(i + 2) % COLORS.length] }} />
-                  <span className="text-xs font-medium capitalize truncate">{p.type || 'Unknown'}</span>
+                  <span className="text-xs font-medium capitalize truncate">{(p.type || 'Unknown').replace(/_/g, ' ')}</span>
                 </div>
               ))}
             </div>
@@ -407,7 +467,7 @@ export function DashboardAnalytics() {
             <div className="space-y-6">
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Top Devices</h4>
-                {audience?.devices?.map((p: any) => (
+                {audience?.devices?.map((p: AudienceEntry) => (
                   <div key={p.device} className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">{p.device || 'Unknown'}</span>
                     <span className="text-sm font-bold">{p.count} views</span>
@@ -417,7 +477,7 @@ export function DashboardAnalytics() {
               <div className="w-full h-[1px] bg-border/50" />
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">Top Browsers</h4>
-                {audience?.browsers?.slice(0, 3).map((p: any) => (
+                {audience?.browsers?.slice(0, 3).map((p: AudienceEntry) => (
                   <div key={p.browser} className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">{p.browser || 'Unknown'}</span>
                     <span className="text-sm font-bold">{p.count}</span>
@@ -479,7 +539,7 @@ export function DashboardAnalytics() {
   )
 }
 
-function StatCard({ title, value, icon, trend }: { title: string, value: any, icon: any, trend?: ReactNode }) {
+function StatCard({ title, value, icon, trend }: { title: string, value: string | number, icon: ReactNode, trend?: ReactNode }) {
   return (
     <Card className="hover:border-primary/20 transition-all shadow-sm py-3 sm:py-4 gap-1 sm:gap-1.5 justify-start">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 p-0 px-4 sm:px-5">

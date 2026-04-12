@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button"
-import { RiPlayCircleFill } from "@remixicon/react"
 import { Link } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -10,7 +9,7 @@ export function Navbar() {
     <header className="fixed top-0 right-0 left-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
       <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
         <Link to="/" className="flex items-center gap-2">
-          <RiPlayCircleFill className="size-5 text-primary" />
+          <img src="/logo.webp" alt="Vercelplay" className="size-5 shrink-0" />
           <span className="text-sm font-semibold tracking-tight">
             Vercelplay
           </span>

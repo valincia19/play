@@ -10,14 +10,44 @@ import { logger } from '../../utils/logger'
 class AdminMonitorService {
   async getStats() {
     return redisManager.getOrSet('admin:stats', 60, async () => {
-      const [uCount, pCount, tCount, vCount] = await Promise.all([
+      const [uCount, pCount, tCount, vCount, timeseriesRaw] = await Promise.all([
         db.select({ count: sql<number>`count(*)` }).from(users),
         db.select({ count: sql<number>`count(*)` }).from(plans),
         db.select({ count: sql<number>`count(*)` }).from(transactions),
         db.select({
           count: sql<number>`count(*)`,
           views: sql<number>`sum(views)`
-        }).from(videos)
+        }).from(videos),
+        db.execute(sql`
+          WITH dates AS (
+            SELECT generate_series(
+              CURRENT_DATE - INTERVAL '6 days',
+              CURRENT_DATE,
+              '1 day'::interval
+            )::date AS date
+          ),
+          daily_users AS (
+            SELECT date_trunc('day', created_at)::date AS d, count(*) as c
+            FROM "users"
+            WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
+            GROUP BY 1
+          ),
+          daily_videos AS (
+            SELECT date_trunc('day', created_at)::date AS d, count(*) as c, sum("views") as v
+            FROM "videos"
+            WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
+            GROUP BY 1
+          )
+          SELECT 
+            to_char(dates.date, 'Dy') as name,
+            COALESCE(daily_users.c, 0)::int as users,
+            COALESCE(daily_videos.c, 0)::int as videos,
+            COALESCE(daily_videos.v, 0)::int as views
+          FROM dates
+          LEFT JOIN daily_users ON dates.date = daily_users.d
+          LEFT JOIN daily_videos ON dates.date = daily_videos.d
+          ORDER BY dates.date ASC
+        `)
       ])
 
       return {
@@ -26,6 +56,7 @@ class AdminMonitorService {
         totalTransactions: Number(tCount[0]?.count || 0),
         totalVideos: Number(vCount[0]?.count || 0),
         totalViews: Number(vCount[0]?.views || 0),
+        timeseries: timeseriesRaw as any[]
       }
     })
   }

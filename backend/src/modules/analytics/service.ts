@@ -213,7 +213,9 @@ export const analyticsService = {
       title: videos.title,
       views: sql<number>`CAST(count(${trackingEvents.id}) AS INT)`,
       fileSizeBytes: videos.fileSizeBytes,
-      createdAt: videos.createdAt
+      thumbnailPath: videos.thumbnailPath,
+      status: videos.status,
+      createdAt: videos.createdAt,
     })
     .from(videos)
     .leftJoin(trackingEvents, and(

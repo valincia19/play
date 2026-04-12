@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { api, videoApi } from "@/lib/api"
+import { api, videoApi, API_BASE_URL } from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   RiEyeLine,
@@ -19,28 +19,43 @@ import {
 } from "@remixicon/react"
 import { formatDistanceToNow } from "date-fns"
 import { formatBytes, formatNumber } from "@/lib/utils"
-import { useAuth } from "@/contexts/auth-context"
+
+interface DashboardOverview {
+  totalViews: number
+  totalVideos: number
+  totalBandwidth: number
+  totalStorage: number
+}
+
+interface DashboardVideo {
+  id: string
+  title: string
+  status: string
+  views: number
+  thumbnailPath?: string
+  createdAt: string
+}
 
 export function DashboardIndex() {
-  const [data, setData] = useState<any>(null)
-  const [recentVideos, setRecentVideos] = useState<any[]>([])
+  const [data, setData] = useState<DashboardOverview | null>(null)
+  const [recentVideos, setRecentVideos] = useState<DashboardVideo[]>([])
   const [bwUsage, setBwUsage] = useState<{ usedMB: number; maxMB: number; percent: number; isUnlimited: boolean } | null>(null)
   const [storageUsage, setStorageUsage] = useState<{ usedMB: number; maxMB: number; percent: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
-  const { user } = useAuth()
-  const plan = (user?.plan || 'free').toLowerCase()
 
   useEffect(() => {
     async function load() {
       try {
-        const [overviewRes, videosRes, bwRes, storageRes] = await Promise.all([
+        const today = new Date().toISOString().split('T')[0];
+        const [overviewRes, topVideosRes, bwRes, storageRes] = await Promise.all([
           api.get('/analytics/overview').catch(() => null),
-          videoApi.list().catch(() => ({ videos: [] })),
+          api.get(`/analytics/videos?from=${today}`).catch(() => []),
           videoApi.getBandwidthUsage().catch(() => null),
           videoApi.getStorageUsage().catch(() => null),
         ])
-        setData(overviewRes)
+        setData(overviewRes as DashboardOverview | null)
+        setRecentVideos((topVideosRes as any) || [])
 
         if (bwRes) setBwUsage(bwRes)
         if (storageRes) {
@@ -51,12 +66,6 @@ export function DashboardIndex() {
             percent: maxMB === -1 ? 0 : Math.min(Math.round((storageRes.usedMB / maxMB) * 100), 100),
           })
         }
-
-        // Sort videos by date descending and take top 5
-        const sortedVideos = (videosRes?.videos || []).sort((a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        setRecentVideos(sortedVideos.slice(0, 5))
       } catch (err) {
         console.error("Failed to load dashboard stats", err)
       } finally {
@@ -184,8 +193,8 @@ export function DashboardIndex() {
         <Card className="md:col-span-2 border-border shadow-sm flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-lg">Recent Uploads</CardTitle>
-              <CardDescription>The latest videos added to your library.</CardDescription>
+              <CardTitle className="text-lg">Daily Video Viewer</CardTitle>
+              <CardDescription>Your most viewed videos across the platform.</CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/videos')}>
               View All
@@ -207,33 +216,39 @@ export function DashboardIndex() {
               <div className="space-y-4">
                 {recentVideos.map((video) => (
                   <div key={video.id} className="flex items-center gap-4 p-3 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors">
-                    <div className="size-10 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                      {video.status === 'ready' ? (
-                        <RiPlayCircleLine className="size-5 text-primary" />
+                    <div className="relative size-12 rounded-md overflow-hidden bg-muted flex items-center justify-center shrink-0 border border-border/40">
+                      {video.thumbnailPath ? (
+                        <img 
+                          src={`${API_BASE_URL}/v/${video.id}/thumbnail`} 
+                          alt={video.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : video.status === 'ready' ? (
+                        <RiPlayCircleLine className="size-6 text-primary" />
                       ) : (
-                        <RiLoader4Line className="size-5 text-muted-foreground animate-spin" />
+                        <RiLoader4Line className="size-6 text-muted-foreground animate-spin" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" title={video.title}>
+                      <p className="text-sm font-semibold truncate group-hover:text-primary transition-colors" title={video.title}>
                         {video.title}
                       </p>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground/80 font-medium">
+                        <span className="flex items-center gap-1.5 py-0.5 px-2 rounded-full bg-primary/5 text-primary border border-primary/10">
+                          <RiEyeLine className="size-3" />
+                          {formatNumber(video.views)} views
+                        </span>
                         <span className="flex items-center gap-1">
                           <RiTimeLine className="size-3" />
                           {formatDistanceToNow(new Date(video.createdAt), { addSuffix: true })}
                         </span>
-                        <span className="flex items-center gap-1">
-                          <RiEyeLine className="size-3" />
-                          {video.views} views
-                        </span>
                       </div>
                     </div>
-                    <div>
-                      <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                        video.status === 'ready' ? 'bg-green-500/10 text-green-500' :
-                        video.status === 'error' ? 'bg-red-500/10 text-red-500' :
-                        'bg-yellow-500/10 text-yellow-500'
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                        video.status === 'ready' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                        video.status === 'error' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                        'bg-amber-500/10 text-amber-500 border-amber-500/20'
                       }`}>
                         {video.status}
                       </span>

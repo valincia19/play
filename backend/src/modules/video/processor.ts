@@ -611,6 +611,59 @@ export class VideoProcessor {
   }
 
   /**
+   * Import video from a remote URL. Usually called by 'import-video' worker job.
+   * Downloads locally, uploads to S3, and standardizes it into the normal processing pipeline.
+   */
+  static async importVideo(videoId: string, remoteUrl: string) {
+    const [video] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1)
+    if (!video || !video.bucketId) throw new Error(`Video not found or no bucket`)
+
+    await db.update(videos).set({ status: 'uploading' }).where(eq(videos.id, videoId))
+
+    const jobDir = path.join(TEMP_DIR, videoId)
+    await fs.mkdir(jobDir, { recursive: true })
+    const localThumbPath = path.join(jobDir, 'thumbnail.jpg')
+
+    try {
+      // Run ffmpeg directly against the HTTP URL to extract 1 frame
+      // This is extremely fast because ffmpeg only buffers enough to decode the first keyframe (usually 1st second)
+      await execFileAsync(ffmpegInstaller.path, [
+        '-y',
+        '-ss', '00:00:01.000', // Seek to 1 second
+        '-i', remoteUrl,       // Input is the remote HTTP URL
+        '-vframes', '1',       // Extract only 1 frame
+        '-q:v', '2',           // High quality JPEG
+        localThumbPath
+      ], { timeout: 30000 })   // 30s timeout is more than enough for 1 frame
+
+      // Upload thumbnail to S3
+      const thumbnailPath = `videos/${video.userId}/${videoId}/thumbnail.jpg`
+      const creds = await storageService.getBucketCredentials(video.bucketId)
+      const s3 = await getCachedS3Client(video.bucketId)
+      
+      await bunUploadToS3(s3, creds.name, thumbnailPath, localThumbPath, 'image/jpeg')
+      
+      // Get media info (duration) remotely via ffprobe
+      const info = await VideoProcessor.getMediaInfo(remoteUrl)
+
+      // Successfully extracted thumbnail and uploaded! 
+      // Mark proxy video as ready.
+      await db.update(videos).set({ 
+        status: 'ready', 
+        thumbnailPath,
+        duration: info.duration > 0 ? info.duration : null,
+        errorMessage: null 
+      }).where(eq(videos.id, videoId))
+
+      logger.info({ event: 'proxy_video_imported_ready', videoId, url: remoteUrl })
+
+    } finally {
+      // Cleanup temp dir
+      await fs.rm(jobDir, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+
+  /**
    * Extract video duration in seconds using ffprobe.
    * Validates file integrity before processing.
    */
@@ -653,7 +706,13 @@ export class VideoProcessor {
       throw new Error(`Video ${videoId} not found or has no bucket assigned`)
     }
 
-    // 2. Idempotency check - skip only if truly done (ready)
+    // 2. Proxy Check - Skip processing for external URLs (they are handled by importVideo)
+    if (video.videoUrl?.startsWith('http')) {
+      logger.info({ event: 'video_processing_proxy_skip', videoId })
+      return
+    }
+
+    // 3. Idempotency check - skip only if truly done (ready)
     // "processing" is allowed to retry — previous attempt may have crashed mid-way
     if (video.status === 'ready') {
       logger.info({ event: 'video_processing_skip', videoId, currentStatus: video.status })

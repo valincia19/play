@@ -143,6 +143,12 @@ export interface AdminStats {
   totalTransactions: number
   totalVideos: number
   totalViews: number
+  timeseries?: {
+    name: string
+    users: number
+    videos: number
+    views: number
+  }[]
 }
 
 // ─── Domain Types ────────────────────────────────────────────
@@ -225,9 +231,10 @@ export interface VideoResponse {
 
 export interface VideoUploadResponse {
   videoId: string
-  status: 'pending' | 'processing' | 'ready' | 'error'
+  status: 'pending' | 'processing' | 'ready' | 'error' | 'uploading'
   processingMode: 'mp4' | 'hls'
   qualities: string[]
+  fileSizeBytes?: number
 }
 
 export interface QueueStatus {

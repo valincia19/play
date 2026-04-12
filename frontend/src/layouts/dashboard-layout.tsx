@@ -1,4 +1,5 @@
-import { Outlet, useNavigate } from "react-router-dom"
+import { useState, useEffect } from "react"
+import { Outlet, useNavigate, useLocation } from "react-router-dom"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   RiMenuLine,
-  RiPlayCircleFill,
   RiNotification3Line,
   RiLogoutBoxLine,
   RiSettings4Line,
@@ -47,6 +47,13 @@ function getAvatarColor(str: string): string {
 export function DashboardLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
+  // Auto-close mobile menu when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [location.pathname])
 
   const handleLogout = () => {
     logout()
@@ -67,7 +74,7 @@ export function DashboardLayout() {
         {/* Universal Top Header */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-border bg-background/95 px-4 md:px-6 lg:px-8 backdrop-blur">
           <div className="flex items-center gap-4">
-            <Sheet>
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="shrink-0 md:hidden">
                   <RiMenuLine className="size-5" />
@@ -81,7 +88,7 @@ export function DashboardLayout() {
               </SheetContent>
             </Sheet>
             <div className="flex items-center gap-2 md:hidden">
-              <RiPlayCircleFill className="size-5 text-primary shrink-0" />
+              <img src="/logo.webp" alt="Vercelplay" className="size-5 shrink-0" />
               <span className="text-sm font-semibold tracking-tight">Vercelplay</span>
             </div>
           </div>

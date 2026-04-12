@@ -170,13 +170,13 @@ const QueueItem = memo(function QueueItem({
 
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-center gap-2 overflow-hidden">
-                <p className="w-0 flex-1 truncate text-[13px] font-medium" title={item.file.name}>{item.file.name}</p>
+                <p className="w-0 flex-1 truncate text-[13px] font-medium" title={item.title}>{item.title}</p>
                 <div className="shrink-0">
                   <StatusBadge status={item.status} hasServerVideo={!!item.videoId} />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted-foreground">
-                <span>{(item.file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                <span>{((item.fileSizeBytes || item.file.size) / (1024 * 1024)).toFixed(1)} MB</span>
                 {item.status === 'uploading' && item.progress > 0 && <span>{item.progress}% uploaded</span>}
                 {item.status === 'uploading' && item.uploadSpeed && (
                   <span>{(item.uploadSpeed / (1024 * 1024)).toFixed(1)} MB/s</span>

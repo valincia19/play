@@ -89,6 +89,7 @@ interface CreateVideoInput {
   fileSizeBytes: number
   processingMode?: 'mp4' | 'hls'
   qualities?: string[]
+  skipQueue?: boolean
 }
 
 class VideoService {
@@ -366,7 +367,9 @@ class VideoService {
       await storageService.trackUpload(bucketId, input.fileSizeBytes)
 
       // Queue all async processing so the worker is the single executor.
-      await VideoProcessor.queueProcessing(video.id)
+      if (!input.skipQueue) {
+        await VideoProcessor.queueProcessing(video.id)
+      }
 
       return video
     } catch (err: any) {

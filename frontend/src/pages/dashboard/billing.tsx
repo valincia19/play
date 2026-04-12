@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useAuth } from "@/contexts/auth-context"
 import { api, videoApi } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,16 +9,49 @@ import { Badge } from "@/components/ui/badge"
 import { RiCheckLine, RiFlashlightLine, RiInformationLine, RiLoader4Line, RiArrowRightLine } from "@remixicon/react"
 import { formatBytes } from "@/lib/utils"
 
+import type { PlanFeature } from "@/lib/types"
+
+interface BillingSubscription {
+  planId: string
+  status: 'active' | 'cancelled' | 'expired'
+  endDate?: string
+}
+
+interface BillingTransaction {
+  id: string
+  planId: string
+  amount: number
+  status: string
+  createdAt: string
+}
+
+interface BillingOverview {
+  totalVideos: number
+  totalBandwidth: number
+  totalStorage: number
+}
+
+interface BillingPlan {
+  id: string
+  name: string
+  price: number
+  position: number
+  maxVideos: number
+  maxStorage: number
+  maxBandwidth: number
+  features?: PlanFeature[]
+}
+
 export function DashboardBilling() {
   const { user } = useAuth()
-  const [subscription, setSubscription] = React.useState<any>(null)
-  const [transactions, setTransactions] = React.useState<any[]>([])
-  const [isUpgrading, setIsUpgrading] = React.useState<string | null>(null)
-  const [targetPlan, setTargetPlan] = React.useState<any | null>(null)
-  const [isLoading, setIsLoading] = React.useState(true)
-  const [overview, setOverview] = React.useState<any>(null)
+  const [subscription, setSubscription] = useState<BillingSubscription | null>(null)
+  const [transactions, setTransactions] = useState<BillingTransaction[]>([])
+  const [isUpgrading, setIsUpgrading] = useState<string | null>(null)
+  const [targetPlan, setTargetPlan] = useState<BillingPlan | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [overview, setOverview] = useState<BillingOverview | null>(null)
 
-  const [dbPlans, setDbPlans] = React.useState<any[]>([])
+  const [dbPlans, setDbPlans] = useState<BillingPlan[]>([])
   const [bwUsage, setBwUsage] = React.useState<{ usedMB: number; maxMB: number; percent: number; isUnlimited: boolean } | null>(null)
   const [storageUsage, setStorageUsage] = React.useState<{ usedMB: number; maxMB: number; percent: number } | null>(null)
 
@@ -26,7 +59,7 @@ export function DashboardBilling() {
     async function loadData() {
       try {
         // Fetch public plans regardless
-        const remotePlans = await api.getPlans()
+        const remotePlans = (await api.getPlans()) as unknown as BillingPlan[]
         setDbPlans(remotePlans)
 
         // Only fetch authenticated contexts if user is loaded
@@ -39,8 +72,8 @@ export function DashboardBilling() {
             videoApi.getStorageUsage().catch(() => null),
           ])
           setSubscription(sub)
-          setTransactions(history)
-          setOverview(ovw)
+          setTransactions(history as unknown as BillingTransaction[])
+          setOverview(ovw as BillingOverview | null)
           if (bw) setBwUsage(bw)
           if (storage) {
             const maxMB = storage.maxMB === -1 ? -1 : storage.maxMB
@@ -77,7 +110,7 @@ export function DashboardBilling() {
   const currentPlanId = (subscription && subscription.status === 'active')
     ? subscription.planId
     : 'free'
-  const currentPlanData = dbPlans.find((p: any) => p.id === currentPlanId)
+  const currentPlanData = dbPlans.find((p: BillingPlan) => p.id === currentPlanId)
 
   // Derive plan limits from DB plan data
   const isFree = currentPlanId === 'free'
@@ -320,7 +353,7 @@ export function DashboardBilling() {
                 </CardHeader>
                 <CardContent className="flex-1 pb-6">
                   <ul className="space-y-2.5 text-xs text-muted-foreground">
-                    {plan.features?.map((feature: any, i: number) => (
+                    {plan.features?.map((feature: PlanFeature, i: number) => (
                       <li key={i} className={`flex gap-x-2.5 items-start ${feature.highlight ? 'text-foreground font-medium' : ''}`}>
                         <RiCheckLine className={`h-4 w-4 shrink-0 mt-0.5 ${isCreator ? 'text-primary' : 'text-muted-foreground/70'}`} />
                         <span>{feature.label}</span>
@@ -481,7 +514,7 @@ export function DashboardBilling() {
             </Button>
             <Button 
               variant="default"
-              onClick={() => handleUpgrade(targetPlan?.id)}
+              onClick={() => handleUpgrade(targetPlan?.id || '')}
               disabled={!!isUpgrading}
               className="min-w-[140px]"
             >

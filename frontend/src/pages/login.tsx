@@ -13,7 +13,7 @@ export function Login() {
   const { refreshUser } = useAuth()
 
   // Where to redirect after login (default: /dashboard)
-  const from = (location.state as any)?.from || '/dashboard'
+  const from = (location.state as { from?: string } | null)?.from || '/dashboard'
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()

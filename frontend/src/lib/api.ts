@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
 export interface ApiResponse<T> {
   success: boolean
@@ -28,6 +28,11 @@ export interface LoginResponse {
 
 export interface VerifyResponse {
   message: string
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string
+  newPassword: string
 }
 
 export interface ApiErrorData {
@@ -105,7 +110,7 @@ async function apiFetch<T>(
     cache: 'no-store',
   }
   // Strip non-standard properties that fetch() would ignore anyway
-  delete (fetchInit as any).auth
+  delete (fetchInit as Record<string, unknown>).auth
 
   const response = await fetch(url, fetchInit)
 
@@ -245,6 +250,11 @@ export const api = {
   get: async <T>(endpoint: string, auth = true): Promise<T> => {
     return apiFetch<T>(endpoint, { method: 'GET', auth })
   },
+
+  /** Change user password */
+  changePassword: async (data: ChangePasswordPayload): Promise<void> => {
+    return apiFetch<void>('/auth/change-password', { method: 'POST', body: JSON.stringify(data), auth: true })
+  },
 }
 
 export const folderApi = {
@@ -330,6 +340,27 @@ export const videoApi = {
   /** Get a single video by ID (used for status polling) */
   getById: async (id: string): Promise<VideoResponse> => {
     return apiFetch<VideoResponse>(`/videos/${id}`, { auth: true })
+  },
+
+  /**
+   * Import video via remote URL (Leecher)
+   */
+  importVideo: async (data: {
+    url: string
+    title?: string
+    folderId?: string | null
+    visibility?: 'private' | 'unlisted' | 'public'
+    processingMode?: 'mp4' | 'hls'
+    qualities?: string[]
+  }): Promise<VideoUploadResponse> => {
+    return apiFetch<VideoUploadResponse>('/videos/import', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        folderId: data.folderId === 'root' ? null : data.folderId
+      }),
+      auth: true
+    })
   },
 
   /**
@@ -694,3 +725,4 @@ export const adsApi = {
     return apiFetch<AdSettingsPayload>('/ads', { method: 'POST', body: JSON.stringify(data), auth: true })
   }
 }
+

@@ -44,7 +44,7 @@ export function AdminStorage() {
       ])
       setProviders(_providers)
       setBuckets(_buckets)
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch storage data')
     } finally {
       setIsLoading(false)
@@ -166,7 +166,7 @@ export function AdminStorage() {
       }
       setIsDialogOpen(false)
       fetchData()
-    } catch (e) {
+    } catch {
       toast.error('Failed to save bucket config')
     }
   }

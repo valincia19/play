@@ -136,19 +136,19 @@ class EmailService {
       })
     }
 
-    const appUrl = process.env.APP_URL
-    if (!appUrl) {
+    const frontendUrl = process.env.FRONTEND_URL
+    if (!frontendUrl) {
       logger.error({
         event: 'email_send_failed',
         error: {
-          message: 'APP_URL environment variable is required for verification links',
+          message: 'FRONTEND_URL environment variable is required for verification links',
           name: 'MissingEnv',
         },
       })
-      throw new Error('APP_URL environment variable is required')
+      throw new Error('FRONTEND_URL environment variable is required')
     }
 
-    const verificationUrl = `${appUrl}/verify?token=${token}`
+    const verificationUrl = `${frontendUrl}/verify?token=${token}`
     const subject = 'Verify your email address'
     const html = this.getVerificationTemplate(name, verificationUrl)
 

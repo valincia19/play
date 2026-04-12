@@ -622,26 +622,28 @@ export class VideoProcessor {
 
     const jobDir = path.join(TEMP_DIR, videoId)
     await fs.mkdir(jobDir, { recursive: true })
-    const localThumbPath = path.join(jobDir, 'thumbnail.jpg')
+    const localThumbPath = path.join(jobDir, 'thumbnail.webp')
 
     try {
       // Run ffmpeg directly against the HTTP URL to extract 1 frame
       // This is extremely fast because ffmpeg only buffers enough to decode the first keyframe (usually 1st second)
       await execFileAsync(ffmpegInstaller.path, [
         '-y',
-        '-ss', '00:00:01.000', // Seek to 1 second
-        '-i', remoteUrl,       // Input is the remote HTTP URL
-        '-vframes', '1',       // Extract only 1 frame
-        '-q:v', '2',           // High quality JPEG
+        '-ss', '00:00:01.000',     // Seek to 1 second
+        '-i', remoteUrl,           // Input is the remote HTTP URL
+        '-vframes', '1',           // Extract only 1 frame
+        '-vf', 'scale=640:-2',     // Consistent sizing
+        '-c:v', 'libwebp',         // WebP output
+        '-quality', '75',          // WebP quality
         localThumbPath
-      ], { timeout: 30000 })   // 30s timeout is more than enough for 1 frame
+      ], { timeout: 30000 })       // 30s timeout is more than enough for 1 frame
 
       // Upload thumbnail to S3
-      const thumbnailPath = `videos/${video.userId}/${videoId}/thumbnail.jpg`
+      const thumbnailPath = `videos/${video.userId}/${videoId}/thumbnail.webp`
       const creds = await storageService.getBucketCredentials(video.bucketId)
       const s3 = await getCachedS3Client(video.bucketId)
       
-      await bunUploadToS3(s3, creds.name, thumbnailPath, localThumbPath, 'image/jpeg')
+      await bunUploadToS3(s3, creds.name, thumbnailPath, localThumbPath, 'image/webp')
       
       // Get media info (duration) remotely via ffprobe
       const info = await VideoProcessor.getMediaInfo(remoteUrl)
@@ -1497,12 +1499,13 @@ export class VideoProcessor {
       // 1. Get Duration
       let duration = 0
       try {
-        const { stdout } = await execFileAsync(ffprobeInstaller.path, [
-          '-v', 'error',
-          '-show_entries', 'format=duration',
-          '-of', 'csv=p=0',
-          resourceUrl,
-        ], { timeout: 30000 }) // 30s timeout (presigned URLs can be slow)
+        // For remote URLs (large files), limit how much data ffprobe reads
+        // to prevent SIGSEGV/OOM on low-memory servers
+        const probeArgs = useLocalFile
+          ? ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', resourceUrl]
+          : ['-v', 'error', '-analyzeduration', '5M', '-probesize', '5M', '-show_entries', 'format=duration', '-of', 'csv=p=0', resourceUrl]
+
+        const { stdout } = await execFileAsync(ffprobeInstaller.path, probeArgs, { timeout: 30000 })
         duration = Math.round(parseFloat(stdout.trim())) || 0
       } catch (err: any) {
         logger.error({ event: 'lightweight_ffprobe_error', videoId, error: err.message, stack: err.stack })
@@ -1544,8 +1547,12 @@ export class VideoProcessor {
         try {
           // Seek to midpoint of video for thumbnail (min 0.5s to avoid black/corrupt first frame)
           const thumbSeekSec = Math.max(0.5, Math.min(1, duration / 2)).toFixed(2)
+          // For remote URLs, limit how much data ffmpeg reads to prevent SIGSEGV/OOM
+          const inputOpts = useLocalFile
+            ? ['-ss', thumbSeekSec, '-noaccurate_seek']
+            : ['-ss', thumbSeekSec, '-noaccurate_seek', '-analyzeduration', '5M', '-probesize', '5M']
           ffmpeg(resourceUrl)
-            .inputOptions(['-ss', thumbSeekSec, '-noaccurate_seek'])
+            .inputOptions(inputOpts)
             .outputOptions(['-vframes', '1', '-vf', 'scale=640:-2', '-c:v', 'libwebp', '-quality', '75'])
             .output(localThumbPath)
             .on('end', () => { clearTimeout(timeout); logger.info({ event: 'lightweight_thumb_success', videoId }); resolve() })

@@ -1482,16 +1482,21 @@ export class VideoProcessor {
       const localThumbPath = path.join(TEMP_DIR, `${videoId}-thumb.webp`)
       const localMp4Path = path.join(TEMP_DIR, `${videoId}.mp4`)
 
-      // Determine resource URL strategy
+      // Always download locally for ffprobe/ffmpeg — the bundled static binaries
+      // crash (SIGSEGV) when accessing HTTP/presigned URLs directly.
+      // Threshold set to 2GB which covers virtually all MP4 uploads.
+      // Disk is cheap; reliability is not.
       let resourceUrl: string
-      const useLocalFile = video.fileSizeBytes && video.fileSizeBytes < 100 * MB
+      const useLocalFile = !video.fileSizeBytes || video.fileSizeBytes < 2 * GB
 
       if (useLocalFile) {
-        // Small file: download locally using Bun.write (zero-copy kernel I/O)
-        await bunDownloadFromS3(s3Client, creds.name, video.videoUrl, localMp4Path, videoId, 120_000)
+        // Download to disk — scales timeout with file size (min 2min, max 10min)
+        const timeoutMs = Math.min(600_000, Math.max(120_000, (video.fileSizeBytes || 0) / MB * 500))
+        await bunDownloadFromS3(s3Client, creds.name, video.videoUrl, localMp4Path, videoId, timeoutMs)
         resourceUrl = localMp4Path
+        logger.info({ event: 'mp4_downloaded_for_probe', videoId, mb: +((video.fileSizeBytes || 0) / MB).toFixed(2) })
       } else {
-        // Large file: use presigned URL for ffprobe/ffmpeg HTTP input
+        // Extremely large file (>2GB): fallback to presigned URL (best-effort)
         const getCmd = new GetObjectCommand({ Bucket: creds.name, Key: video.videoUrl })
         resourceUrl = await getSignedUrl(s3Client, getCmd, { expiresIn: 3600 })
       }
@@ -1499,13 +1504,12 @@ export class VideoProcessor {
       // 1. Get Duration
       let duration = 0
       try {
-        // For remote URLs (large files), limit how much data ffprobe reads
-        // to prevent SIGSEGV/OOM on low-memory servers
-        const probeArgs = useLocalFile
-          ? ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', resourceUrl]
-          : ['-v', 'error', '-analyzeduration', '5M', '-probesize', '5M', '-show_entries', 'format=duration', '-of', 'csv=p=0', resourceUrl]
-
-        const { stdout } = await execFileAsync(ffprobeInstaller.path, probeArgs, { timeout: 30000 })
+        const { stdout } = await execFileAsync(ffprobeInstaller.path, [
+          '-v', 'error',
+          '-show_entries', 'format=duration',
+          '-of', 'csv=p=0',
+          resourceUrl,
+        ], { timeout: 30000 })
         duration = Math.round(parseFloat(stdout.trim())) || 0
       } catch (err: any) {
         logger.error({ event: 'lightweight_ffprobe_error', videoId, error: err.message, stack: err.stack })
@@ -1547,12 +1551,8 @@ export class VideoProcessor {
         try {
           // Seek to midpoint of video for thumbnail (min 0.5s to avoid black/corrupt first frame)
           const thumbSeekSec = Math.max(0.5, Math.min(1, duration / 2)).toFixed(2)
-          // For remote URLs, limit how much data ffmpeg reads to prevent SIGSEGV/OOM
-          const inputOpts = useLocalFile
-            ? ['-ss', thumbSeekSec, '-noaccurate_seek']
-            : ['-ss', thumbSeekSec, '-noaccurate_seek', '-analyzeduration', '5M', '-probesize', '5M']
           ffmpeg(resourceUrl)
-            .inputOptions(inputOpts)
+            .inputOptions(['-ss', thumbSeekSec, '-noaccurate_seek'])
             .outputOptions(['-vframes', '1', '-vf', 'scale=640:-2', '-c:v', 'libwebp', '-quality', '75'])
             .output(localThumbPath)
             .on('end', () => { clearTimeout(timeout); logger.info({ event: 'lightweight_thumb_success', videoId }); resolve() })

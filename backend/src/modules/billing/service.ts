@@ -144,6 +144,9 @@ class BillingService {
       status: 'pending',
     }).returning({ id: transactions.id })
 
+    if (!txResult || !txResult[0]) {
+      throw error(errorCodes.INTERNAL_ERROR, 'Failed to initialize transaction')
+    }
     const orderId = txResult[0].id
     const slug = process.env.PAKASIR_SLUG || 'vergaynet'
     const paymentUrl = `https://app.pakasir.com/pay/${slug}/${amountDue}?order_id=${orderId}&qris_only=1`

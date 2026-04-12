@@ -109,7 +109,7 @@ export function StudioWorkerMonitor() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Worker Monitor</h1>
           <p className="text-sm text-muted-foreground">
-            Pantau heartbeat worker, antrean BullMQ, dan video terbaru yang masih diproses atau gagal.
+            Monitor worker heartbeat, BullMQ queue status, and recently processed or failed videos.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -150,7 +150,7 @@ export function StudioWorkerMonitor() {
         <CardHeader>
           <CardTitle>Runtime Snapshot</CardTitle>
           <CardDescription>
-            Snapshot terakhir dibuat pada {snapshot ? formatTime(snapshot.generatedAt) : "-"}.
+            Last snapshot generated at {snapshot ? formatTime(snapshot.generatedAt) : "-"}.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
@@ -208,7 +208,7 @@ export function StudioWorkerMonitor() {
           <Card>
             <CardHeader>
               <CardTitle>Recent Video Processing</CardTitle>
-              <CardDescription>Status terbaru dari video yang baru berubah state.</CardDescription>
+              <CardDescription>Latest status of recently updated videos.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -242,7 +242,7 @@ export function StudioWorkerMonitor() {
                   )) : (
                     <TableRow>
                       <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                        Belum ada activity video terbaru.
+                        No recent video activity.
                       </TableCell>
                     </TableRow>
                   )}
@@ -256,7 +256,7 @@ export function StudioWorkerMonitor() {
           <Card>
             <CardHeader>
               <CardTitle>Failed Queue Jobs</CardTitle>
-              <CardDescription>Job BullMQ yang gagal terbaru, termasuk alasan error.</CardDescription>
+              <CardDescription>Recent BullMQ jobs that failed, including error details.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {snapshot?.jobs.failed.length ? snapshot.jobs.failed.map((job) => (
@@ -275,7 +275,7 @@ export function StudioWorkerMonitor() {
                 </div>
               )) : (
                 <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                  Tidak ada failed job di snapshot ini.
+                  No failed jobs in this snapshot.
                 </div>
               )}
             </CardContent>
@@ -286,7 +286,7 @@ export function StudioWorkerMonitor() {
           <Card>
             <CardHeader>
               <CardTitle>Active Queue Jobs</CardTitle>
-              <CardDescription>Job yang sedang diproses worker sekarang.</CardDescription>
+              <CardDescription>Jobs currently being processed by the worker.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {snapshot?.jobs.active.length ? snapshot.jobs.active.map((job) => (
@@ -309,7 +309,7 @@ export function StudioWorkerMonitor() {
                 </div>
               )) : (
                 <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                  Tidak ada active job saat snapshot diambil.
+                  No active jobs at the time of this snapshot.
                 </div>
               )}
             </CardContent>
@@ -322,9 +322,9 @@ export function StudioWorkerMonitor() {
           <CardContent className="flex items-center gap-3 p-4">
             <RiAlarmWarningLine className="size-5 text-destructive" />
             <div>
-              <p className="font-medium text-destructive">Worker heartbeat tidak terdeteksi</p>
+              <p className="font-medium text-destructive">Worker heartbeat not detected</p>
               <p className="text-sm text-muted-foreground">
-                Pastikan proses `npm run dev:worker` sedang aktif dan bisa menulis heartbeat ke Redis.
+                Make sure the worker process is running and can write heartbeats to Redis.
               </p>
             </div>
           </CardContent>

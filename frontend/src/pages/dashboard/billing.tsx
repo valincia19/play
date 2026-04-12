@@ -454,7 +454,7 @@ export function DashboardBilling() {
                   <Badge variant="outline" className="text-[10px] h-5 rounded-full px-2 font-medium">Current Plan</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1.5">Monthly Plan</p>
-                <p className="text-xs text-muted-foreground mt-1">Expired after upgrading</p>
+                <p className="text-xs text-muted-foreground mt-1">Expires upon upgrade</p>
               </div>
 
               {/* Arrow Connector */}
@@ -473,7 +473,7 @@ export function DashboardBilling() {
                     <Badge variant="secondary" className="text-[10px] h-5 rounded-full px-2 font-medium bg-primary/10 text-primary border-0 hover:bg-primary/20">Upgrading</Badge>
                   </div>
                   <p className="text-xs text-primary/70 mt-1.5">Monthly Plan</p>
-                  <p className="text-xs text-foreground font-medium mt-1">Immediately effective</p>
+                  <p className="text-xs text-foreground font-medium mt-1">Effective immediately</p>
                 </div>
               </div>
             </div>
@@ -498,7 +498,7 @@ export function DashboardBilling() {
               </div>
 
               <div className="flex justify-between items-center pt-4 mt-2 border-t border-border/40">
-                <span className="font-semibold text-foreground">Total Pay</span>
+                <span className="font-semibold text-foreground">Total Due</span>
                 <span className="text-xl font-bold text-primary">Rp {targetPlan?.price.toLocaleString('id-ID')}</span>
               </div>
             </div>

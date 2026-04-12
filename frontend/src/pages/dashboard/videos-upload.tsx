@@ -1062,7 +1062,7 @@ export function DashboardVideosUpload() {
                     </div>
                   ) : (
                     <div className="rounded-lg border border-border/50 bg-background/70 p-3 text-[11px] leading-5 text-muted-foreground">
-                      MP4 mode paling cepat siap publish. Cocok untuk upload cepat tanpa adaptive streaming.
+                      MP4 mode is the fastest path to publish. Ideal for quick uploads without adaptive streaming.
                     </div>
                   )}
                 </div>

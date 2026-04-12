@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { RiQrScan2Line, RiPaypalLine, RiBankCardLine, RiBitCoinLine, RiArrowLeftLine, RiSecurePaymentLine, RiLoader4Line } from "@remixicon/react"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const PAYMENT_METHODS = [
   { id: 'qris', name: 'QRIS', icon: RiQrScan2Line, desc: 'Instant QR payment (IDR)' },
@@ -18,18 +19,38 @@ export function DashboardCheckout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedMethod, setSelectedMethod] = useState('qris')
   
+  const [plans, setPlans] = useState<any[]>([])
+  const [subscription, setSubscription] = useState<any>(null)
+
   const searchParams = new URLSearchParams(location.search)
   const planId = searchParams.get('planId') || ''
-  const amountStr = searchParams.get('amount') || '0'
-  const amountDue = parseInt(amountStr, 10)
   
   useEffect(() => {
     if (!planId) {
       toast.error("No valid plan selected. Redirecting back to billing.")
       navigate('/dashboard/billing')
+      return
     }
+
+    async function fetchData() {
+      try {
+        const [remotePlans, sub] = await Promise.all([
+          api.getPlans(),
+          api.getSubscription()
+        ])
+        setPlans(remotePlans as any[])
+        setSubscription(sub)
+      } catch (err) {
+        toast.error("Failed to load checkout details.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchData()
   }, [planId, navigate])
 
   const handlePayment = async () => {
@@ -50,8 +71,38 @@ export function DashboardCheckout() {
 
   if (!planId) return null
 
+  // Calculate trusted amounts locally
+  let amountDue = 0
+  let targetPlanName = planId
+  let planPrice = 0
+  
+  if (!isLoading && plans.length > 0) {
+    const targetPlan = plans.find(p => p.id === planId)
+    if (targetPlan) {
+      targetPlanName = targetPlan.name
+      planPrice = targetPlan.price
+      
+      let proratedDiscount = 0
+      const currentPlanId = (subscription && subscription.status === 'active') ? subscription.planId : 'free'
+      const currentPlanData = plans.find(p => p.id === currentPlanId)
+
+      if (currentPlanData && currentPlanData.price > 0 && subscription?.status === 'active' && subscription.endDate) {
+        const end = new Date(subscription.endDate).getTime()
+        const now = Date.now()
+        if (end > now) {
+          const remainingDays = Math.max(0, Math.ceil((end - now) / (1000 * 60 * 60 * 24)))
+          const maxDays = 30
+          proratedDiscount = Math.floor((Math.min(remainingDays, maxDays) / maxDays) * currentPlanData.price)
+        }
+      }
+
+      if (proratedDiscount > targetPlan.price) proratedDiscount = targetPlan.price
+      amountDue = Math.max(0, targetPlan.price - proratedDiscount)
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6 pb-8">
+    <div className="mx-auto max-w-3xl space-y-6 pb-8 pt-2">
       <div className="flex items-center gap-3">
         <Button variant="outline" size="icon" onClick={() => navigate(-1)} className="h-8 w-8">
           <RiArrowLeftLine className="size-4" />
@@ -120,26 +171,43 @@ export function DashboardCheckout() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
-              <div className="flex justify-between items-center pb-3 border-b border-border">
-                <span className="text-muted-foreground capitalize font-medium">{planId} Plan (Monthly)</span>
-                <span className="font-medium text-foreground">Rp {amountDue.toLocaleString('id-ID')}</span>
-              </div>
-              
-              <div className="flex justify-between items-center text-lg font-bold text-primary pt-1">
-                <span>Total Due</span>
-                <span>Rp {amountDue.toLocaleString('id-ID')}</span>
-              </div>
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-6 w-full mt-4" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center pb-3 border-b border-border">
+                    <span className="text-muted-foreground capitalize font-medium">{targetPlanName} Plan</span>
+                    <span className="font-medium text-foreground">Rp {planPrice.toLocaleString('id-ID')}</span>
+                  </div>
+                  
+                  {planPrice > amountDue && (
+                    <div className="flex justify-between items-center pb-3 border-b border-border">
+                      <span className="text-muted-foreground">Prorated Credit</span>
+                      <span className="font-medium text-emerald-500">-Rp {(planPrice - amountDue).toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center text-lg font-bold text-primary pt-1">
+                    <span>Total Due</span>
+                    <span>Rp {amountDue.toLocaleString('id-ID')}</span>
+                  </div>
+                </>
+              )}
             </CardContent>
             <CardFooter>
               <Button 
                 onClick={handlePayment} 
-                disabled={isProcessing} 
+                disabled={isProcessing || isLoading} 
                 className="w-full h-11 relative overflow-hidden text-base shadow-lg shadow-primary/20"
               >
-                {isProcessing ? (
+                {isProcessing || isLoading ? (
                   <>
                     <RiLoader4Line className="mr-2 size-5 animate-spin" />
-                    Processing Payment...
+                    {isProcessing ? 'Processing Payment...' : 'Loading...'}
                   </>
                 ) : (
                   <span className="flex items-center font-bold tracking-wide">

@@ -94,8 +94,8 @@ export function DashboardBilling() {
     loadData()
   }, [user])
 
-  const handleUpgrade = (planId: string, amountDue: number) => {
-    navigate(`/dashboard/billing/checkout?planId=${planId}&amount=${amountDue}`)
+  const handleUpgrade = (planId: string) => {
+    navigate(`/dashboard/billing/checkout?planId=${planId}`)
   }
 
   // Derive plan from active subscription — NOT from stale user.planId
@@ -528,7 +528,7 @@ export function DashboardBilling() {
             </Button>
             <Button 
               variant="default"
-              onClick={() => handleUpgrade(targetPlan?.id || '', totalDue)}
+              onClick={() => handleUpgrade(targetPlan?.id || '')}
               className="min-w-[140px]"
             >
               Continue to Checkout

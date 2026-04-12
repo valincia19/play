@@ -16,7 +16,11 @@ interface RequestStore {
 
 const app = new Elysia()
   .use(cors({
-    origin: frontendUrl,
+    origin: [
+      frontendUrl,
+      // Share domain (verply.net) also needs API access for video playback
+      process.env.SHARE_DOMAIN ? `https://${process.env.SHARE_DOMAIN}` : '',
+    ].filter(Boolean),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

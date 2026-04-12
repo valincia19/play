@@ -33,7 +33,7 @@ services:
     container_name: vercelplay-api
     restart: always
     ports:
-      - '4000:4000'
+      - '80:4000'
     env_file: .env
     volumes:
       - ./tmp-processing:/app/tmp-processing

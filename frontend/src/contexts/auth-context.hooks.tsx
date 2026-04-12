@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- AuthProvider + useAuth are co-exported as a unified context API */
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
-import { api, getAccessToken, type UserProfile } from '@/lib/api'
+import { api, getAccessToken } from '@/lib/api'
+import type { UserProfile } from '@/lib/types'
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -72,9 +73,6 @@ function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   )
 }
-
-// Export types and hook separately to avoid react-refresh warning
-export type { AuthContextType }
 
 // Export the hook and provider
 export { AuthProvider, useAuth }

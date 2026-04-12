@@ -161,7 +161,7 @@ export function AdminStorage() {
         await adminApi.storage.updateBucket(editingBucket.id, payload)
         toast.success('Bucket updated')
       } else {
-        await adminApi.storage.createBucket(formData)
+        await adminApi.storage.createBucket(formData as unknown as Record<string, unknown>)
         toast.success('Bucket added')
       }
       setIsDialogOpen(false)

@@ -184,7 +184,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             )}
 
-            {process.env.NODE_ENV === 'development' && error?.stack && (
+            {import.meta.env.MODE === 'development' && error?.stack && (
               <details className="rounded-lg bg-muted p-4">
                 <summary className="cursor-pointer text-sm font-medium">
                   Stack Trace (Development)

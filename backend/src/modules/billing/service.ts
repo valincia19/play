@@ -308,6 +308,64 @@ class BillingService {
   }
 
   /**
+   * Handles incoming webhook from Pakasir payment gateway
+   */
+  async handlePakasirWebhook(payload: any) {
+    const { amount, order_id, project, status } = payload
+    
+    logger.info({ event: 'pakasir_webhook_received', payload })
+
+    // 1. Verify project slug
+    const mySlug = process.env.PAKASIR_SLUG || 'vergaynet'
+    if (project !== mySlug) {
+      logger.warn({ event: 'pakasir_webhook_invalid_project', project, expected: mySlug })
+      return { status: 'ignored', reason: 'invalid_project' }
+    }
+
+    // 2. Only process 'completed' status
+    if (status !== 'completed') {
+      return { status: 'acknowledged', reason: 'non_completed_status' }
+    }
+
+    // 3. Find pending transaction
+    const tx = await db.query.transactions.findFirst({
+      where: eq(transactions.id, order_id)
+    })
+
+    if (!tx) {
+      logger.error({ event: 'pakasir_webhook_transaction_not_found', order_id })
+      return { status: 'error', reason: 'transaction_not_found' }
+    }
+
+    if (tx.status === 'success' || tx.status === 'paid') {
+      return { status: 'acknowledged', reason: 'already_processed' }
+    }
+
+    // 4. Verify amount (Pakasir sends amount, we should check it matches tx.totalPayment or tx.amount)
+    // Note: totalPayment includes fees, amount is our base. If user paid totalPayment, it should match.
+    if (tx.totalPayment && Number(amount) !== tx.totalPayment) {
+       logger.warn({ event: 'pakasir_webhook_amount_mismatch', order_id, expected: tx.totalPayment, received: amount })
+       // Optional: you can still proceed or fail. Usually fail for safety.
+       return { status: 'error', reason: 'amount_mismatch' }
+    }
+
+    try {
+      // 5. Update transaction and Upgrade user
+      await db.update(transactions)
+        .set({ status: 'paid' })
+        .where(eq(transactions.id, order_id))
+
+      await this.upgradePlan(tx.userId, tx.planId)
+      
+      logger.info({ event: 'pakasir_webhook_processed_success', order_id, userId: tx.userId })
+      return { status: 'success' }
+    } catch (err: any) {
+      logger.error({ event: 'pakasir_webhook_processing_failed', order_id, error: err.message })
+      return { status: 'error', reason: 'internal_failure' }
+    }
+  }
+
+  /**
    * Fetch all active plans.
    */
   async getPlans() {

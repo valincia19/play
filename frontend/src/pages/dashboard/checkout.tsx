@@ -4,10 +4,9 @@ import { api } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { RiQrScan2Line, RiPaypalLine, RiBankCardLine, RiBitCoinLine, RiArrowLeftLine, RiSecurePaymentLine, RiLoader4Line, RiTimeLine } from "@remixicon/react"
+import { RiQrScan2Line, RiPaypalLine, RiBankCardLine, RiBitCoinLine, RiArrowLeftLine, RiSecurePaymentLine, RiLoader4Line } from "@remixicon/react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import QRCode from "react-qr-code"
 
 const PAYMENT_METHODS = [
   { id: 'qris', name: 'QRIS', icon: RiQrScan2Line, desc: 'Instant QR payment (IDR)' },

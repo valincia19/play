@@ -62,3 +62,7 @@ export const publicBillingRoutes = new Elysia({ prefix: '/billing' })
     const plans = await billingService.getPlans()
     return success(plans)
   })
+  .post('/webhook/pakasir', async ({ body }) => {
+    // Process payment completion from Pakasir
+    return await billingService.handlePakasirWebhook(body)
+  })

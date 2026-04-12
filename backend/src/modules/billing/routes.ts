@@ -22,6 +22,14 @@ export const billingRoutes = new Elysia({ prefix: '/billing' })
       return success(history)
     }
   )
+  // GET: Retrieve Transaction Detail
+  .get(
+    '/transaction/:id',
+    async ({ userId, params }) => {
+      const tx = await billingService.getTransaction(userId!, params.id)
+      return success(tx)
+    }
+  )
   // POST: Generate Pakasir Checkout URL
   .post(
     '/checkout/qris',

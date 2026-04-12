@@ -4,9 +4,10 @@ import { api } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { RiQrScan2Line, RiPaypalLine, RiBankCardLine, RiBitCoinLine, RiArrowLeftLine, RiSecurePaymentLine, RiLoader4Line } from "@remixicon/react"
+import { RiQrScan2Line, RiPaypalLine, RiBankCardLine, RiBitCoinLine, RiArrowLeftLine, RiSecurePaymentLine, RiLoader4Line, RiTimeLine } from "@remixicon/react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import QRCode from "react-qr-code"
 
 const PAYMENT_METHODS = [
   { id: 'qris', name: 'QRIS', icon: RiQrScan2Line, desc: 'Instant QR payment (IDR)' },
@@ -56,11 +57,13 @@ export function DashboardCheckout() {
   const handlePayment = async () => {
     setIsProcessing(true)
     try {
-      const res = await api.createCheckoutSession(planId) as { paymentUrl: string }
-      if (res.paymentUrl) {
-        window.location.href = res.paymentUrl
+      const res = await api.createCheckoutSession(planId)
+      if (res.transactionId) {
+        navigate(`/dashboard/billing/checkout/${res.transactionId}`)
+      } else if (res.paymentUrl) {
+         window.location.href = res.paymentUrl
       } else {
-        toast.error("Failed to generate payment URL")
+        toast.error("Failed to generate payment")
         setIsProcessing(false)
       }
     } catch (err: any) {
@@ -71,7 +74,7 @@ export function DashboardCheckout() {
 
   if (!planId) return null
 
-  // Calculate trusted amounts locally
+  // Calculate trusted amounts locally for display before generating QR
   let amountDue = 0
   let targetPlanName = planId
   let planPrice = 0
@@ -207,7 +210,7 @@ export function DashboardCheckout() {
                 {isProcessing || isLoading ? (
                   <>
                     <RiLoader4Line className="mr-2 size-5 animate-spin" />
-                    {isProcessing ? 'Processing Payment...' : 'Loading...'}
+                    {isProcessing ? 'Connecting...' : 'Loading...'}
                   </>
                 ) : (
                   <span className="flex items-center font-bold tracking-wide">

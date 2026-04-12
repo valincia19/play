@@ -26,9 +26,12 @@ export const transactions = pgTable('transactions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   planId: text('plan_id').notNull(),
-  amount: integer('amount').notNull(), // amount in IDR/cents depending on future integration
+  amount: integer('amount').notNull(), 
+  paymentNumber: text('payment_number'), // Store QR string or VA number
+  totalPayment: integer('total_payment'), // Final amount from gateway
+  expiredAt: timestamp('expired_at', { withTimezone: true }),
   type: transactionTypeEnum('type').notNull().default('purchase'),
-  status: transactionStatusEnum('status').notNull().default('success'),
+  status: transactionStatusEnum('status').notNull().default('pending'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

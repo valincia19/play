@@ -26,6 +26,8 @@ import { DashboardAds } from "@/pages/dashboard/ads"
 import { DashboardAnalytics } from "@/pages/dashboard/analytics"
 import { DashboardSettings } from "@/pages/dashboard/settings"
 import { DashboardBilling } from "@/pages/dashboard/billing"
+import { DashboardCheckout } from "@/pages/dashboard/checkout"
+import { DashboardInvoice } from "@/pages/dashboard/invoice"
 
 import { StudioLayout } from "@/layouts/studio-layout"
 import { Studio } from "@/pages/studio/index"
@@ -124,6 +126,8 @@ export function App() {
             <Route path="ads" element={<DashboardAds />} />
             <Route path="analytics" element={<DashboardAnalytics />} />
             <Route path="billing" element={<DashboardBilling />} />
+            <Route path="billing/checkout" element={<DashboardCheckout />} />
+            <Route path="billing/checkout/:id" element={<DashboardInvoice />} />
             <Route path="settings" element={<DashboardSettings />} />
           </Route>
 

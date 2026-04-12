@@ -233,10 +233,14 @@ export const api = {
 
   /** Upgrade Plan */
   createCheckoutSession: async (planId: string) => {
-    return fetchWithAuth('/billing/checkout/qris', {
+    return apiFetch<{ qrString?: string, totalPayment?: number, expiredAt?: string, transactionId?: string, paymentUrl?: string }>('/billing/checkout/qris', {
       method: 'POST',
-      body: JSON.stringify({ planId })
+      body: JSON.stringify({ planId }),
+      auth: true
     })
+  },
+  getTransaction: async (id: string) => {
+    return apiFetch<any>(`/billing/transaction/${id}`, { auth: true })
   },
   upgradePlan: async (plan: string) => {
     return apiFetch<{ message: string }>('/billing/upgrade', {

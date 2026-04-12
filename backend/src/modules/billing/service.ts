@@ -102,7 +102,7 @@ class BillingService {
   /**
    * Generates a Pakasir Checkout URL for QRIS payment
    */
-  async createCheckoutSession(userId: string, newPlanId: string): Promise<{ paymentUrl: string }> {
+  async createCheckoutSession(userId: string, newPlanId: string) {
     const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
     if (!user) throw error(errorCodes.USER_NOT_FOUND, 'User not found')
 
@@ -149,9 +149,64 @@ class BillingService {
     }
     const orderId = txResult[0].id
     const slug = process.env.PAKASIR_SLUG || 'vergaynet'
-    const paymentUrl = `https://app.pakasir.com/pay/${slug}/${amountDue}?order_id=${orderId}&qris_only=1`
+    const apiKey = process.env.PAKASIR_API_KEY || 'test'
 
-    return { paymentUrl }
+    // Call Pakasir Transaction API
+    const pakasirRes = await fetch(`https://app.pakasir.com/api/transactioncreate/qris`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: slug,
+        order_id: orderId,
+        amount: amountDue,
+        api_key: apiKey
+      })
+    })
+
+    const data = (await pakasirRes.json()) as any
+    
+    if (!data || !data.payment || !data.payment.payment_number) {
+      logger.error({ event: 'pakasir_error', data })
+      throw error(errorCodes.INTERNAL_ERROR, 'Failed to generate QR payment')
+    }
+
+    // Update transaction with gateway data
+    await db.update(transactions)
+      .set({
+        paymentNumber: data.payment.payment_number,
+        totalPayment: data.payment.total_payment,
+        expiredAt: new Date(data.payment.expired_at)
+      })
+      .where(eq(transactions.id, orderId))
+
+    return { 
+      transactionId: orderId,
+      qrString: data.payment.payment_number, 
+      totalPayment: data.payment.total_payment,
+      expiredAt: data.payment.expired_at
+    }
+  }
+
+  /**
+   * Retrieves a specific transaction detail for the user
+   */
+  async getTransaction(userId: string, transactionId: string) {
+    const tx = await db.query.transactions.findFirst({
+      where: and(
+        eq(transactions.id, transactionId),
+        eq(transactions.userId, userId)
+      )
+    })
+    
+    if (!tx) throw error(errorCodes.NOT_FOUND, 'Transaction not found')
+    
+    // Also fetch plan name for display
+    const plan = await db.query.plans.findFirst({ where: eq(plans.id, tx.planId) })
+    
+    return {
+      ...tx,
+      planName: plan?.name || tx.planId
+    }
   }
 
   /**

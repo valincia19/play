@@ -103,21 +103,51 @@ const app = new Elysia()
 
   // ── Global Error Diagnostics ──
   .onError(({ code, error: err, request }) => {
-    // Handle different error types safely (rate-limit errors have different structure)
-    const errorMessage = typeof err === 'string' ? err : (err as any)?.message || 'An unexpected server error occurred'
+    // Narrow down the unknown error type safely
+    const isObjectError = typeof err === 'object' && err !== null
+    const errObj = isObjectError ? (err as Record<string, unknown>) : {}
 
-    logger.error({
+    // Our error() utility throws plain objects: { success: false, error: { code, message } }
+    // Detect and return them directly without logging them as "UNKNOWN" crashes
+    if (isObjectError && 'success' in errObj && errObj.success === false) {
+      return errObj
+    }
+
+    // Determine a readable error message
+    let errorMessage = 'An unexpected server error occurred'
+    if (typeof err === 'string') {
+      errorMessage = err
+    } else if (err instanceof Error) {
+      errorMessage = err.message
+    } else if (isObjectError && typeof errObj.message === 'string') {
+      errorMessage = errObj.message
+    }
+
+    // Build diagnostic payload
+    const errorDetail: Record<string, unknown> = {
       event: 'server_exception',
       code,
       url: request.url,
       error: errorMessage,
-      stack: (err as any)?.stack,
-    })
+    }
 
-    // Return standard error response
-    if (code === 'NOT_FOUND') return { success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } }
+    // Extract stack traces and metadata
+    if (err instanceof Error) {
+      errorDetail.stack = err.stack
+      errorDetail.errorName = err.name
+    } else if (isObjectError) {
+      errorDetail.errorKeys = Object.keys(errObj)
+      errorDetail.rawError = JSON.stringify(errObj, null, 0).slice(0, 500)
+    }
 
-    const errorCode = (err as any)?.code || 'INTERNAL_ERROR'
+    logger.error(errorDetail)
+
+    // Standardize HTTP response
+    if (code === 'NOT_FOUND') {
+      return { success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } }
+    }
+
+    const errorCode = (isObjectError && typeof errObj.code === 'string') ? errObj.code : 'INTERNAL_ERROR'
 
     return {
       success: false,

@@ -147,25 +147,30 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
   })
   .get('/:id', async ({ params, query, request, set }) => {
     const { id } = params
-    const referer = request.headers.get('referer')
-    const origin = request.headers.get('origin')
-    const fetchMode = request.headers.get('sec-fetch-mode')
-    const allowedOrigin = env.frontendUrl
-    const isFromFrontend = (referer?.startsWith(allowedOrigin)) || (origin?.startsWith(allowedOrigin))
-    if (!isFromFrontend && fetchMode === 'navigate') {
-      throw error(errorCodes.INVALID_TOKEN, 'Unauthorized access')
-    }
-    if (!query.token || !query.expires || !verifyStreamSignature(id, parseInt(query.expires), query.token, query.context)) {
-      throw error(errorCodes.INVALID_TOKEN, 'Stream session expired or invalid')
-    }
-    const video = await videoService.getVideoById('all_access', id)
-    if (!video || !video.bucketId) throw error(errorCodes.NOT_FOUND, 'Video not found')
-    if ((video.visibility === 'private' || video.isPrivate) && query.context === 'public_share') {
-      throw error(errorCodes.INVALID_TOKEN, 'This video is private and cannot be viewed via public links')
-    }
-    if (!video.hlsPath || video.processingMode === 'mp4') {
-      try {
+    try {
+      const referer = request.headers.get('referer')
+      const origin = request.headers.get('origin')
+      const fetchMode = request.headers.get('sec-fetch-mode')
+      const allowedOrigins = [env.frontendUrl]
+      if (env.shareDomain) allowedOrigins.push(`https://${env.shareDomain}`)
+      const isFromAllowed = allowedOrigins.some(o => referer?.startsWith(o) || origin?.startsWith(o))
+      if (!isFromAllowed && fetchMode === 'navigate') {
+        throw error(errorCodes.INVALID_TOKEN, 'Unauthorized access')
+      }
+      if (!query.token || !query.expires || !verifyStreamSignature(id, parseInt(query.expires), query.token, query.context)) {
+        throw error(errorCodes.INVALID_TOKEN, 'Stream session expired or invalid')
+      }
+      const video = await videoService.getVideoById('all_access', id)
+      if (!video || !video.bucketId) throw error(errorCodes.NOT_FOUND, 'Video not found')
+      if ((video.visibility === 'private' || video.isPrivate) && query.context === 'public_share') {
+        throw error(errorCodes.INVALID_TOKEN, 'This video is private and cannot be viewed via public links')
+      }
+      if (!video.hlsPath || video.processingMode === 'mp4') {
         const range = request.headers.get('range')
+        if (!video.videoUrl) {
+          logger.error({ event: 'stream_missing_video_url', videoId: id, status: video.status })
+          throw error(errorCodes.NOT_FOUND, 'Video file is not available yet')
+        }
         if (video.videoUrl.startsWith('http')) {
           const proxyRes = await fetch(video.videoUrl, { headers: range ? { range } : {} })
           const contentLengthStr = proxyRes.headers.get('content-length')
@@ -195,43 +200,50 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
           if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
           return s3Response.Body as any
         }
-      } catch (err: any) {
-        if (err.statusCode) throw err
-        throw error(errorCodes.INTERNAL_ERROR, 'Failed to proxy video stream')
       }
+      const host = request.headers.get('host')
+      const protocol = host?.includes('localhost') ? 'http' : 'https'
+      let tokenParams = `token=${query.token}&expires=${query.expires}`
+      if (query.context) tokenParams += `&context=${query.context}`
+      set.status = 302
+      set.headers['Location'] = `${protocol}://${host}/v/${id}/${path.basename(video.hlsPath)}?${tokenParams}`
+      return
+    } catch (err: any) {
+      // Re-throw structured API errors (they already have statusCode)
+      if (err?.success === false || err?.statusCode) throw err
+      logger.error({ event: 'stream_handler_crash', videoId: id, error: err?.message, stack: err?.stack })
+      throw error(errorCodes.INTERNAL_ERROR, 'Failed to stream video')
     }
-    const host = request.headers.get('host')
-    const protocol = host?.includes('localhost') ? 'http' : 'https'
-    let tokenParams = `token=${query.token}&expires=${query.expires}`
-    if (query.context) tokenParams += `&context=${query.context}`
-    set.status = 302
-    set.headers['Location'] = `${protocol}://${host}/v/${id}/${path.basename(video.hlsPath)}?${tokenParams}`
-    return
   }, {
     params: t.Object({ id: t.String() }),
     query: t.Object({ token: t.String(), expires: t.String(), context: t.Optional(t.String()) })
   })
   .get('/:id/*', async ({ params, query, request, set }) => {
     const { id, '*': internalPath } = params
-    const referer = request.headers.get('referer')
-    const origin = request.headers.get('origin')
-    const fetchMode = request.headers.get('sec-fetch-mode')
-    const allowedOrigin = env.frontendUrl
-    const isFromFrontend = (referer?.startsWith(allowedOrigin)) || (origin?.startsWith(allowedOrigin))
-    if (!isFromFrontend && fetchMode === 'navigate') {
-      throw error(errorCodes.INVALID_TOKEN, 'Unauthorized access')
-    }
-    if (!query.token || !query.expires || !verifyStreamSignature(id, parseInt(query.expires), query.token, query.context)) {
-      throw error(errorCodes.INVALID_TOKEN, 'Stream session expired or invalid')
-    }
-    const video = await videoService.getVideoById('all_access', id)
-    if (!video || !video.bucketId) throw error(errorCodes.NOT_FOUND, 'Video not found')
-    if ((video.visibility === 'private' || video.isPrivate) && query.context === 'public_share') {
-      throw error(errorCodes.INVALID_TOKEN, 'This video is private and cannot be viewed via public links')
-    }
-    if (!video.hlsPath || video.processingMode === 'mp4') {
-      const { client, creds } = await getS3ClientForBucket(video.bucketId)
-      try {
+    try {
+      const referer = request.headers.get('referer')
+      const origin = request.headers.get('origin')
+      const fetchMode = request.headers.get('sec-fetch-mode')
+      const allowedOrigins = [env.frontendUrl]
+      if (env.shareDomain) allowedOrigins.push(`https://${env.shareDomain}`)
+      const isFromAllowed = allowedOrigins.some(o => referer?.startsWith(o) || origin?.startsWith(o))
+      if (!isFromAllowed && fetchMode === 'navigate') {
+        throw error(errorCodes.INVALID_TOKEN, 'Unauthorized access')
+      }
+      if (!query.token || !query.expires || !verifyStreamSignature(id, parseInt(query.expires), query.token, query.context)) {
+        throw error(errorCodes.INVALID_TOKEN, 'Stream session expired or invalid')
+      }
+      const video = await videoService.getVideoById('all_access', id)
+      if (!video || !video.bucketId) throw error(errorCodes.NOT_FOUND, 'Video not found')
+      if ((video.visibility === 'private' || video.isPrivate) && query.context === 'public_share') {
+        throw error(errorCodes.INVALID_TOKEN, 'This video is private and cannot be viewed via public links')
+      }
+      if (!video.hlsPath || video.processingMode === 'mp4') {
+        if (!video.videoUrl) {
+          logger.error({ event: 'stream_missing_video_url', videoId: id, status: video.status })
+          throw error(errorCodes.NOT_FOUND, 'Video file is not available yet')
+        }
+        const { client, creds } = await getS3ClientForBucket(video.bucketId)
         const range = request.headers.get('range')
         const s3Response = await client.send(new GetObjectCommand({ Bucket: creds.name, Key: video.videoUrl, Range: range || undefined }))
         const contentLength = s3Response.ContentLength ?? 0
@@ -245,19 +257,14 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
         if (s3Response.ContentLength) set.headers['Content-Length'] = s3Response.ContentLength.toString()
         if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
         return s3Response.Body as any
-      } catch (err: any) {
-        if (err.statusCode) throw err
-        throw error(errorCodes.INTERNAL_ERROR, 'Stream proxy failed')
       }
-    }
-    const { client, creds } = await getS3ClientForBucket(video.bucketId)
-    const normalizedHlsPath = (video.hlsPath || '').replace(/\\/g, '/')
-    const lastSlashIndex = normalizedHlsPath.lastIndexOf('/')
-    const hlsDir = lastSlashIndex !== -1 ? normalizedHlsPath.substring(0, lastSlashIndex) : ''
-    const targetFile = internalPath || normalizedHlsPath.split('/').pop() || ''
-    const s3Key = hlsDir ? `${hlsDir}/${targetFile}` : targetFile
-    if (targetFile.endsWith('.ts')) {
-      try {
+      const { client, creds } = await getS3ClientForBucket(video.bucketId)
+      const normalizedHlsPath = (video.hlsPath || '').replace(/\\/g, '/')
+      const lastSlashIndex = normalizedHlsPath.lastIndexOf('/')
+      const hlsDir = lastSlashIndex !== -1 ? normalizedHlsPath.substring(0, lastSlashIndex) : ''
+      const targetFile = internalPath || normalizedHlsPath.split('/').pop() || ''
+      const s3Key = hlsDir ? `${hlsDir}/${targetFile}` : targetFile
+      if (targetFile.endsWith('.ts')) {
         const s3Response = await client.send(new GetObjectCommand({ Bucket: creds.name, Key: s3Key }))
         const contentLength = s3Response.ContentLength ?? 0
         if (contentLength > 0 && !await checkBandwidthQuota(video.userId, contentLength)) {
@@ -269,15 +276,10 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
         set.headers['Cache-Control'] = 'public, max-age=3600'
         if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
         return s3Response.Body as any
-      } catch (err: any) {
-        logger.error({ event: 'stream_segment_failed', videoId: id, s3Key, error: err.message })
-        throw error(errorCodes.NOT_FOUND, 'Segment missing')
       }
-    }
-    try {
       const data = await client.send(new GetObjectCommand({ Bucket: creds.name, Key: s3Key }))
       const content = await data.Body?.transformToString()
-      if (!content) throw new Error('Empty')
+      if (!content) throw error(errorCodes.NOT_FOUND, 'Empty playlist')
       const host = request.headers.get('host')
       const protocol = host?.includes('localhost') ? 'http' : 'https'
       let proxyPath = `/v/${id}`
@@ -294,8 +296,9 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
       set.headers['Cache-Control'] = 'no-cache'
       return signedContent
     } catch (err: any) {
-      logger.error({ event: 'playlist_sign_failed', videoId: id, s3Key, error: err.message })
-      throw error(errorCodes.NOT_FOUND, 'Asset not found')
+      if (err?.success === false || err?.statusCode) throw err
+      logger.error({ event: 'stream_wildcard_crash', videoId: id, path: internalPath, error: err?.message, stack: err?.stack })
+      throw error(errorCodes.INTERNAL_ERROR, 'Failed to stream asset')
     }
   }, {
     params: t.Object({ id: t.String(), '*': t.String() }),

@@ -120,10 +120,10 @@ export function DashboardAnalytics() {
         const dateQuery = fromStr ? `?from=${fromStr}&to=${toStr}` : ''
 
         const [ov, vw, ad, vd] = await Promise.all([
-          api.get<AnalyticsOverview>(`/analytics/overview${dateQuery}`),
-          api.get<{ daily?: ViewsDaily[]; retention?: RetentionData; devices?: AudienceEntry[]; browsers?: AudienceEntry[]; countries?: AudienceEntry[] }>(`/analytics/views${dateQuery}`),
-          api.get<AdsAnalytics>(`/analytics/ads${dateQuery}`),
-          api.get<TopVideo[]>(`/analytics/videos${dateQuery}`)
+          api.get<AnalyticsOverview>(`/analytics/overview${dateQuery}`).catch(() => null),
+          api.get<{ daily?: ViewsDaily[]; retention?: RetentionData; devices?: AudienceEntry[]; browsers?: AudienceEntry[]; countries?: AudienceEntry[] }>(`/analytics/views${dateQuery}`).catch(() => null),
+          api.get<AdsAnalytics>(`/analytics/monetization${dateQuery}`).catch(() => null),
+          api.get<TopVideo[]>(`/analytics/videos${dateQuery}`).catch(() => [])
         ])
         setOverview(ov)
         setViewsData(vw?.daily || (Array.isArray(vw) ? vw : []))
@@ -332,8 +332,8 @@ export function DashboardAnalytics() {
             </CardTitle>
             <CardDescription>Daily view count and unique visitors.</CardDescription>
           </CardHeader>
-          <CardContent className="pt-4">
-            <ResponsiveContainer width="100%" height={300}>
+          <CardContent className="pt-4" style={{ minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={0}>
               <AreaChart data={viewsData}>
                 <defs>
                   <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
@@ -363,8 +363,8 @@ export function DashboardAnalytics() {
             </CardTitle>
             <CardDescription>Impressions correlated with estimated revenue.</CardDescription>
           </CardHeader>
-          <CardContent className="pt-4">
-            <ResponsiveContainer width="100%" height={300}>
+          <CardContent className="pt-4" style={{ minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={0}>
               <ComposedChart data={adsData?.daily?.map((d: AdDailyEntry) => ({ ...d, revenue: (d.impressions * ecpm / 1000).toFixed(2) })) || []}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
@@ -392,8 +392,8 @@ export function DashboardAnalytics() {
               <RiPieChart2Line className="size-4" /> Ad Providers
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <ResponsiveContainer width="100%" height={240}>
+          <CardContent className="pt-0" style={{ minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={adsData?.providers?.map((p: AdProviderEntry) => ({ name: p.provider || 'Others', value: Number(p.count) })) || []}
@@ -428,8 +428,8 @@ export function DashboardAnalytics() {
               <RiAdvertisementLine className="size-4" /> Ad Formats
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <ResponsiveContainer width="100%" height={240}>
+          <CardContent className="pt-0" style={{ minWidth: 0, minHeight: 0 }}>
+            <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={adsData?.types?.map((p: AdTypeEntry) => ({ name: (p.type || 'Unknown').replace(/_/g, ' '), value: Number(p.count) })) || []}

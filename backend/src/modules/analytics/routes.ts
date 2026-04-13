@@ -21,7 +21,7 @@ export const analyticsRoutes = new Elysia({ prefix: '/analytics' })
   }, {
     query: t.Object({ from: t.Optional(t.String()), to: t.Optional(t.String()) })
   })
-  .get('/ads', async ({ userId, query }) => {
+  .get('/monetization', async ({ userId, query }) => {
     return {
       success: true,
       data: await analyticsService.getAdsAnalytics(userId!, query.from, query.to)

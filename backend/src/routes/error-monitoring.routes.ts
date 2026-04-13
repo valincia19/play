@@ -11,6 +11,7 @@ import { CircuitBreakerRegistry } from '../utils/circuit-breaker'
 import { requireAdminUser } from '../modules/admin/context'
 import { logger } from '../utils/logger'
 import type { ErrorCategory } from '../utils/error-handler'
+import { env } from '../config/env'
 
 export const errorMonitoringRoutes = new Elysia({ prefix: '/admin/error-monitoring' })
 
@@ -234,9 +235,8 @@ export const errorMonitoringRoutes = new Elysia({ prefix: '/admin/error-monitori
     }
   })
 
-  // ─── Test Error Scenarios (Development Only) ───────────────────────
   .post('/test-error', async ({ body }) => {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.nodeEnv === 'production') {
       return { success: false, error: { code: 'FORBIDDEN', message: 'Error testing disabled in production' } }
     }
 

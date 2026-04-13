@@ -1,10 +1,16 @@
 import pino from 'pino'
 
-const isDevelopment = process.env.NODE_ENV === 'development'
+const nodeEnv = process.env.NODE_ENV
+if (!nodeEnv) throw new Error('❌ NODE_ENV environment variable is required')
+
+const isDevelopment = nodeEnv === 'development'
+
+const logLevel = process.env.LOG_LEVEL
+if (!logLevel) throw new Error('❌ LOG_LEVEL environment variable is required')
 
 export const logger = pino(
   {
-    level: process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info'),
+    level: logLevel,
     ...(isDevelopment
       ? {}
       : {
@@ -44,6 +50,7 @@ export const logEvents = {
   SERVER_ERROR: 'server_error',
   DATABASE_ERROR: 'database_error',
   REDIS_ERROR: 'redis_error',
+  SECURITY_ERROR: 'security_error',
 }
 
 export const logUserEvent = (event: string, data?: Record<string, any>) => {

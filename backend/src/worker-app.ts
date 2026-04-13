@@ -1,3 +1,8 @@
+import { loadConfig } from './config/env'
+
+// Initialize and validate config first
+loadConfig()
+
 import { logger } from './utils/logger'
 import { redisManager } from './utils/redis'
 import { db, videos, trackingEvents } from './schema'
@@ -281,15 +286,17 @@ export async function runWorkerApp() {
 
   setInterval(async () => {
     try {
-      const expiredCount = await billingService.processExpiredSubscriptions()
-      if (expiredCount && expiredCount > 0) {
+      const expiredSubsCount = await billingService.processExpiredSubscriptions()
+      const expiredTxsCount = await billingService.processExpiredTransactions()
+      
+      if ((expiredSubsCount && expiredSubsCount > 0) || (expiredTxsCount && expiredTxsCount > 0)) {
         logger.info({
-          event: 'cron_processed_expired_subs',
-          data: { parsedQuantity: expiredCount }
+          event: 'cron_processed_billing',
+          data: { expiredSubs: expiredSubsCount, expiredTxs: expiredTxsCount }
         })
       }
     } catch (err: any) {
-      logger.error({ event: 'cron_expired_sub_error', message: err.message })
+      logger.error({ event: 'cron_billing_error', message: err.message })
     }
   }, CRON_INTERVAL_MS)
 
@@ -319,10 +326,11 @@ export async function runWorkerApp() {
   }, TEMP_CLEANUP_INTERVAL_MS)
 
   try {
-    const catchupCount = await billingService.processExpiredSubscriptions()
+    const catchupSubs = await billingService.processExpiredSubscriptions()
+    const catchupTxs = await billingService.processExpiredTransactions()
     logger.info({
       event: 'worker_boot_catchup',
-      data: { processed: catchupCount }
+      data: { processedSubs: catchupSubs, processedTxs: catchupTxs }
     })
   } catch (err: any) {
     logger.error({ event: 'boot_subscription_check_error', error: err.message, stack: err.stack })

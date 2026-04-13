@@ -1,5 +1,6 @@
 import { useEffect } from "react"
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom"
+import { config } from "./config"
 import { AuthProvider } from "@/contexts/auth-context"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -45,9 +46,8 @@ function DomainRedirector() {
   useEffect(() => {
     const hostname = window.location.hostname
     
-    // Ambil configurasi domain dari file .env
-    const shareDomain = import.meta.env.VITE_SHARE_DOMAIN
-    const mainDomain = import.meta.env.VITE_MAIN_DOMAIN
+    // Ambil configurasi domain dari config terpusat
+    const { shareDomain, mainDomain } = config
     
     if (!shareDomain || !mainDomain) return
 

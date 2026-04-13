@@ -3,14 +3,16 @@ import { useNavigate, useParams } from "react-router-dom"
 import { api } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { RiQrScan2Line, RiArrowLeftLine, RiTimeLine, RiLoader4Line, RiDownloadLine, RiPrinterLine } from "@remixicon/react"
+import { RiQrScan2Line, RiArrowLeftLine, RiTimeLine, RiLoader4Line, RiDownloadLine, RiPrinterLine, RiTestTubeLine } from "@remixicon/react"
 import QRCode from "react-qr-code"
 
 export function DashboardInvoice() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(true)
+  const [isSimulating, setIsSimulating] = useState(false)
   const [transaction, setTransaction] = useState<any>(null)
   const [timeLeft, setTimeLeft] = useState<string>("--:--")
 
@@ -40,10 +42,15 @@ export function DashboardInvoice() {
     const pollInterval = setInterval(async () => {
         try {
             const res = await api.getTransaction(id!)
+            setTransaction(res) // Update UI with latest status
+            
             if (res.status === 'completed' || res.status === 'paid' || res.status === 'success') {
                 clearInterval(pollInterval)
                 toast.success("Payment successful!")
                 setTimeout(() => navigate('/dashboard/billing'), 2000)
+            } else if (res.status === 'expired' || res.status === 'failed') {
+                clearInterval(pollInterval)
+                toast.error("Transaction has expired or failed.")
             }
         } catch (e) {}
     }, 5000)
@@ -70,6 +77,18 @@ export function DashboardInvoice() {
     return () => clearInterval(interval)
   }, [transaction?.expiredAt])
 
+  const handleSimulate = async () => {
+    if (!id) return
+    setIsSimulating(true)
+    try {
+        await api.simulatePayment(id)
+        toast.info("Simulation sent to Pakasir. Waiting for webhook...")
+    } catch (err: any) {
+        toast.error(err.message || "Simulation failed")
+        setIsSimulating(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-[400px] items-center justify-center">
@@ -77,6 +96,11 @@ export function DashboardInvoice() {
       </div>
     )
   }
+
+  const isExpired = timeLeft === "Expired" || transaction?.status === "expired" || transaction?.status === "failed" || transaction?.status === "canceled"
+
+  // Check if we are in local dev mode to show sandbox tools
+  const isDev = import.meta.env.DEV
 
   return (
     <div className="mx-auto max-w-2xl pb-12 pt-4">
@@ -91,35 +115,63 @@ export function DashboardInvoice() {
           </div>
         </div>
         <div className="flex gap-2">
-            <Button variant="ghost" size="icon" className="h-9 w-9"><RiDownloadLine className="size-4" /></Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9"><RiPrinterLine className="size-4" /></Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9" disabled={isExpired}><RiDownloadLine className="size-4" /></Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9" disabled={isExpired}><RiPrinterLine className="size-4" /></Button>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
         <Card className="border-border/60 bg-card overflow-hidden h-fit">
-          <div className="bg-primary/5 py-4 border-b border-border/50 text-center">
+          <div className="bg-primary/5 py-4 border-b border-border/50 text-center relative">
              <h2 className="font-bold text-primary flex items-center justify-center gap-2">
                 <RiQrScan2Line className="size-5" />
                 QRIS Payment
              </h2>
+             {isDev && (
+                 <Badge variant="outline" className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] bg-indigo-500/10 text-indigo-500 border-indigo-500/20">DEV</Badge>
+             )}
           </div>
-          <CardContent className="pt-8 pb-8 flex flex-col items-center">
-             <div className="p-4 bg-white rounded-2xl shadow-sm ring-1 ring-black/5 mb-6">
+          <CardContent className="pt-8 pb-8 flex flex-col items-center relative">
+             <div className={`p-4 bg-white rounded-2xl shadow-sm ring-1 ring-black/5 mb-6 transition-all ${isExpired ? 'opacity-20 grayscale blur-sm' : ''}`}>
                 <QRCode 
-                  value={transaction?.paymentNumber || "WAITING"} 
+                  value={isExpired ? "EXPIRED" : (transaction?.paymentNumber || "WAITING")} 
                   size={180}
                   style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                   viewBox={`0 0 256 256`}
                 />
              </div>
-             <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-500 rounded-full text-sm font-semibold mb-2">
+
+             {isExpired && (
+                <div className="absolute top-[35%] left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500 text-white font-bold px-4 py-2 rounded-lg shadow-lg rotate-[-10deg] text-lg uppercase tracking-wider">
+                  Expired
+                </div>
+             )}
+
+             <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold mb-2 ${isExpired ? 'bg-red-500/10 text-red-600 dark:text-red-500' : 'bg-amber-500/10 text-amber-600 dark:text-amber-500'}`}>
                 <RiTimeLine className="size-4" />
                 {timeLeft}
              </div>
-             <p className="text-[10px] text-muted-foreground max-w-[200px] text-center italic">
-                Scan the QR code above with any payment app that supports QRIS.
+             <p className="text-[10px] text-muted-foreground max-w-[200px] text-center italic mb-4">
+                {isExpired ? "This payment session has expired. Please create a new checkout." : "Scan the QR code above with any payment app that supports QRIS."}
              </p>
+
+             {/* Sandbox Simulation Tool */}
+             {isDev && !isExpired && (
+                 <Button 
+                   variant="outline" 
+                   size="sm" 
+                   onClick={handleSimulate} 
+                   disabled={isSimulating}
+                   className="w-[200px] border-indigo-500/30 bg-indigo-500/5 text-indigo-600 hover:bg-indigo-500/10 hover:text-indigo-700"
+                 >
+                   {isSimulating ? (
+                     <RiLoader4Line className="size-4 animate-spin mr-2" />
+                   ) : (
+                     <RiTestTubeLine className="size-4 mr-2" />
+                   )}
+                   Simulate Pay (Sandbox)
+                 </Button>
+             )}
           </CardContent>
         </Card>
 
@@ -135,7 +187,9 @@ export function DashboardInvoice() {
                </div>
                <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Status</span>
-                  <span className="font-bold text-amber-500 capitalize">{transaction?.status}</span>
+                  <span className={`font-bold capitalize ${isExpired ? 'text-red-500' : 'text-amber-500'}`}>
+                    {transaction?.status}
+                  </span>
                </div>
                <div className="pt-2 border-t border-border flex justify-between items-baseline">
                   <span className="text-base font-bold">Total</span>

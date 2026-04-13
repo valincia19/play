@@ -56,13 +56,21 @@ export const billingRoutes = new Elysia({ prefix: '/billing' })
       })
     }
   )
+  // POST: Simulate Payment (Sandbox only)
+  .post(
+    '/simulate/:id',
+    async ({ params }) => {
+      const result = await billingService.simulatePayment(params.id)
+      return success(result)
+    }
+  )
 
 export const publicBillingRoutes = new Elysia({ prefix: '/billing' })
   .get('/plans', async () => {
     const plans = await billingService.getPlans()
     return success(plans)
   })
-  .post('/webhook/pakasir', async ({ body }) => {
+  .post('/webhook/pakasir', async ({ body, headers }) => {
     // Process payment completion from Pakasir
-    return await billingService.handlePakasirWebhook(body)
+    return await billingService.handlePakasirWebhook(body, headers['x-pakasir-signature'])
   })

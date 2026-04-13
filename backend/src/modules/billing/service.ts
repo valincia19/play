@@ -4,6 +4,7 @@ import { eq, desc, and, lt, sql, asc } from 'drizzle-orm'
 import { error, errorCodes } from '../../utils/response'
 import { logger } from '../../utils/logger'
 import { redisManager } from '../../utils/redis'
+import { env } from '../../config/env'
 
 export interface UpgradePlanResult {
   message: string
@@ -148,8 +149,8 @@ class BillingService {
       throw error(errorCodes.INTERNAL_ERROR, 'Failed to initialize transaction')
     }
     const orderId = txResult[0].id
-    const slug = process.env.PAKASIR_SLUG || 'vergaynet'
-    const apiKey = process.env.PAKASIR_API_KEY || 'test'
+    const slug = env.pakasirSlug
+    const apiKey = env.pakasirApiKey
 
     // Call Pakasir Transaction API
     const pakasirRes = await fetch(`https://app.pakasir.com/api/transactioncreate/qris`, {
@@ -273,7 +274,42 @@ class BillingService {
   }
 
   /**
+   * Process expired pending transactions and mark them as expired.
+   * Useful for QRIS / pending orders that reached their expiration time.
+   */
+  async processExpiredTransactions() {
+    try {
+      const now = new Date()
+      const expiredTxs = await db.query.transactions.findMany({
+        where: and(
+          eq(transactions.status, 'pending'),
+          lt(transactions.expiredAt, now)
+        )
+      })
+
+      if (expiredTxs.length > 0) {
+        for (const tx of expiredTxs) {
+          await db.update(transactions)
+            .set({ status: 'expired' })
+            .where(eq(transactions.id, tx.id))
+        }
+
+        logger.info({
+          event: 'transactions_expired',
+          data: { count: expiredTxs.length }
+        }, `Marked ${expiredTxs.length} pending transactions as expired`)
+      }
+
+      return expiredTxs.length
+    } catch (err: unknown) {
+      logger.error({ event: 'process_expired_transactions_failed', error: err, stack: (err as any)?.stack })
+      return 0
+    }
+  }
+
+  /**
    * Gets the active subscription details for a user.
+
    * Prioritizes active status, falls back to most recent.
    */
   async getSubscription(userId: string) {
@@ -310,13 +346,33 @@ class BillingService {
   /**
    * Handles incoming webhook from Pakasir payment gateway
    */
-  async handlePakasirWebhook(payload: any) {
+  async handlePakasirWebhook(payload: any, signature?: string) {
     const { amount, order_id, project, status } = payload
     
-    logger.info({ event: 'pakasir_webhook_received', payload })
+    logger.info({ event: 'pakasir_webhook_received', order_id, status })
 
-    // 1. Verify project slug
-    const mySlug = process.env.PAKASIR_SLUG || 'vergaynet'
+    // 1. Security Verification
+    const mySecret = env.webhookSecret
+    
+    // Logic: If a signature is provided, verify it. 
+    // Otherwise, check if the payload contains a verification token.
+    if (signature) {
+      const crypto = require('crypto')
+      const hmac = crypto.createHmac('sha256', mySecret)
+      const calculatedSignature = hmac.update(JSON.stringify(payload)).digest('hex')
+      
+      if (signature !== calculatedSignature) {
+        logger.error({ event: 'pakasir_webhook_invalid_signature', order_id })
+        throw new Error('Invalid webhook signature')
+      }
+    } else if (payload.secret !== mySecret) {
+      // Fallback: check plain 'secret' field in body if your gateway doesn't support headers
+      logger.warn({ event: 'pakasir_webhook_unauthorized', order_id })
+      return { status: 'error', reason: 'unauthorized' }
+    }
+
+    // 2. Verify project slug
+    const mySlug = env.pakasirSlug
     if (project !== mySlug) {
       logger.warn({ event: 'pakasir_webhook_invalid_project', project, expected: mySlug })
       return { status: 'ignored', reason: 'invalid_project' }
@@ -363,6 +419,42 @@ class BillingService {
       logger.error({ event: 'pakasir_webhook_processing_failed', order_id, error: err.message })
       return { status: 'error', reason: 'internal_failure' }
     }
+  }
+
+  /**
+   * Simulate a successful payment (Only works if Pakasir project is in Sandbox mode)
+   */
+  async simulatePayment(transactionId: string) {
+    const tx = await db.query.transactions.findFirst({
+      where: eq(transactions.id, transactionId)
+    })
+    
+    if (!tx || tx.status !== 'pending') {
+      throw error(errorCodes.INVALID_INPUT, 'Transaction not found or not pending')
+    }
+
+    const slug = env.pakasirSlug
+    const apiKey = env.pakasirApiKey
+
+    // Call Pakasir Payment Simulation API
+    const res = await fetch(`https://app.pakasir.com/api/paymentsimulation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project: slug,
+        order_id: tx.id,
+        amount: tx.amount,
+        api_key: apiKey
+      })
+    })
+
+    const data = await res.json() as any
+    if (!res.ok || data.status === 'error') {
+      logger.error({ event: 'pakasir_simulation_failed', data })
+      throw error(errorCodes.INTERNAL_ERROR, data.message || 'Failed to simulate payment. Ensure project is in sandbox mode.')
+    }
+    
+    return { success: true, message: 'Payment simulation triggered successfully' }
   }
 
   /**

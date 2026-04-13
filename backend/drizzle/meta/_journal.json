@@ -148,6 +148,20 @@
       "when": 1775806275462,
       "tag": "0020_needy_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1776021867320,
+      "tag": "0021_certain_millenium_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1776022436133,
+      "tag": "0022_past_speedball",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,8 @@
 import jwt from 'jsonwebtoken'
+import { env } from '../config/env'
 
-const JWT_SECRET = process.env.JWT_SECRET as string
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required')
-}
+// Lazy access — avoids 'Config not loaded' when Bun --watch re-evaluates modules
+function getJwtSecret() { return env.jwtSecret }
 
 const JWT_EXPIRES_IN = '7d'
 const REFRESH_TOKEN_EXPIRES_IN = '30d'
@@ -19,12 +18,12 @@ export interface TokenPair {
 }
 
 export function generateTokens(payload: JwtPayload): TokenPair {
-  const accessToken = jwt.sign(payload, JWT_SECRET, {
+  const accessToken = jwt.sign(payload, getJwtSecret(), {
     expiresIn: JWT_EXPIRES_IN,
     algorithm: 'HS256',
   })
 
-  const refreshToken = jwt.sign(payload, JWT_SECRET, {
+  const refreshToken = jwt.sign(payload, getJwtSecret(), {
     expiresIn: REFRESH_TOKEN_EXPIRES_IN,
     algorithm: 'HS256',
   })
@@ -34,7 +33,7 @@ export function generateTokens(payload: JwtPayload): TokenPair {
 
 export function verifyToken(token: string): JwtPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as unknown as JwtPayload
+    const decoded = jwt.verify(token, getJwtSecret()) as unknown as JwtPayload
     return decoded
   } catch {
     return null

@@ -1,4 +1,6 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+import { config } from '../config'
+
+export const API_BASE_URL = config.apiBaseUrl
 
 export interface ApiResponse<T> {
   success: boolean
@@ -241,6 +243,9 @@ export const api = {
   },
   getTransaction: async (id: string) => {
     return apiFetch<any>(`/billing/transaction/${id}`, { auth: true })
+  },
+  simulatePayment: async (id: string) => {
+    return apiFetch<any>(`/billing/simulate/${id}`, { method: 'POST', auth: true })
   },
   upgradePlan: async (plan: string) => {
     return apiFetch<{ message: string }>('/billing/upgrade', {

@@ -3,9 +3,12 @@ import { eq, isNull } from 'drizzle-orm'
 import { hashPassword, verifyPassword, generateVerificationToken } from '../../utils/crypto'
 import { isValidEmail, isValidPassword, validateName, isDisposableEmail } from '../../utils/validation'
 import { generateTokens, verifyToken, type JwtPayload } from '../../utils/jwt'
+import { createHash } from 'crypto'
 import { error, errorCodes } from '../../utils/response'
 import { emailService } from '../../services/email.service'
 import { logger, logEvents } from '../../utils/logger'
+import { SecurityError, SECURITY_ERROR_CODES } from '../../utils/security-error'
+import { redisManager } from '../../utils/redis'
 
 export interface RegisterInput {
   name: string
@@ -44,63 +47,7 @@ export interface UserResult {
 class AuthService {
   private readonly VERIFICATION_TOKEN_EXPIRY = 15 * 60 // 15 minutes in seconds
 
-  private redisClient: any = null
-
-  constructor() {
-    this.initRedis()
-  }
-
-  private initRedis(): void {
-    const redisUrl = process.env.REDIS_URL
-    if (!redisUrl) {
-      logger.error({
-        event: logEvents.REDIS_ERROR,
-        message: 'Redis URL not configured',
-      })
-      throw new Error('REDIS_URL environment variable is required')
-    }
-
-    try {
-      const Redis = require('ioredis')
-      this.redisClient = new Redis(redisUrl, {
-        family: 4, // Force IPv4
-        retryStrategy: (times: number) => Math.min(times * 1000, 5000),
-        showFriendlyErrorStack: true
-      })
-      this.redisClient.on('ready', () => {
-        logger.info({
-          event: 'redis_connected',
-          message: 'Redis client connected',
-        })
-      })
-      this.redisClient.on('error', (err: any) => {
-        if (err.code === 'ECONNREFUSED' || (err.name === 'AggregateError' && err.message.includes('ECONNREFUSED'))) {
-          logger.error({ event: logEvents.REDIS_ERROR, message: 'AuthService: Redis connection refused (is Redis running?)' })
-        } else {
-          logger.error({
-            event: logEvents.REDIS_ERROR,
-            message: 'Redis connection error',
-            error: {
-              message: err.message,
-              name: err.name,
-              stack: err.stack,
-            },
-          })
-        }
-      })
-    } catch (e) {
-      logger.error({
-        event: logEvents.SERVER_ERROR,
-        message: 'Failed to initialize Redis',
-        error: {
-          message: e instanceof Error ? e.message : String(e),
-          name: 'RedisInitError',
-          stack: e instanceof Error ? e.stack : undefined,
-        },
-      })
-      throw new Error('Failed to initialize Redis')
-    }
-  }
+  constructor() {}
 
   async register(input: RegisterInput): Promise<RegisterResult> {
     logger.info({
@@ -193,7 +140,7 @@ class AuthService {
 
     // Store token in Redis with expiry
     try {
-      await this.redisClient.setex(tokenKey, this.VERIFICATION_TOKEN_EXPIRY, createdUser.id)
+      await redisManager.set(tokenKey, createdUser.id, this.VERIFICATION_TOKEN_EXPIRY)
     } catch (redisError) {
       logger.warn({
         event: logEvents.REDIS_ERROR,
@@ -244,16 +191,9 @@ class AuthService {
 
     const tokenKey = `verification:${token}`
 
-    if (!this.redisClient) {
-      logger.error({
-        event: logEvents.SERVER_ERROR,
-        message: 'Redis client not available',
-      })
-      throw error(errorCodes.INTERNAL_ERROR, 'Redis not available')
-    }
-
     // Get user ID from Redis
-    const userId = await this.redisClient.get(tokenKey)
+    const redis = await redisManager.getClient()
+    const userId = await redis.get(tokenKey)
     if (!userId) {
       logger.warn({
         event: logEvents.USER_VERIFY_FAILED,
@@ -278,7 +218,7 @@ class AuthService {
     // Check if already verified
     if (user.isVerified) {
       // Still delete token
-      await this.redisClient.del(tokenKey)
+      await redisManager.del(tokenKey)
 
       logger.warn({
         event: logEvents.USER_VERIFY_FAILED,
@@ -292,7 +232,7 @@ class AuthService {
     await db.update(users).set({ isVerified: true }).where(eq(users.id, userId))
 
     // Delete token
-    await this.redisClient.del(tokenKey)
+    await redisManager.del(tokenKey)
 
     logger.info({
       event: logEvents.USER_VERIFY_SUCCESS,
@@ -335,9 +275,19 @@ class AuthService {
       logger.warn({
         event: logEvents.USER_LOGIN_FAILED,
         reason: 'user_not_found',
-        data: { email: trimmedEmail },
+        data: { emailHash: createHash('sha256').update(trimmedEmail).digest('hex').substring(0, 8) },
       })
-      throw error(errorCodes.INVALID_CREDENTIALS, 'Invalid email or password')
+
+      // Log security event
+      SecurityError.logAuthSecurity('login_failed', {
+        ip: 'unknown',
+        email: trimmedEmail,
+        action: 'login',
+        success: false,
+        reason: 'user_not_found'
+      })
+
+      throw error(errorCodes.INVALID_CREDENTIALS, SECURITY_ERROR_CODES.INVALID_CREDENTIALS)
     }
 
     if (user.deletedAt) {
@@ -355,9 +305,19 @@ class AuthService {
       logger.warn({
         event: logEvents.USER_LOGIN_FAILED,
         reason: 'wrong_password',
-        data: { email: trimmedEmail },
+        data: { emailHash: createHash('sha256').update(trimmedEmail).digest('hex').substring(0, 8) },
       })
-      throw error(errorCodes.INVALID_CREDENTIALS, 'Invalid email or password')
+
+      // Log security event
+      SecurityError.logAuthSecurity('login_failed', {
+        ip: 'unknown',
+        email: trimmedEmail,
+        action: 'login',
+        success: false,
+        reason: 'wrong_password'
+      })
+
+      throw error(errorCodes.INVALID_CREDENTIALS, SECURITY_ERROR_CODES.INVALID_CREDENTIALS)
     }
 
     // Check if verified — resend verification email if not
@@ -372,7 +332,7 @@ class AuthService {
       try {
         const token = generateVerificationToken()
         const tokenKey = `verification:${token}`
-        await this.redisClient.setex(tokenKey, this.VERIFICATION_TOKEN_EXPIRY, user.id)
+        await redisManager.set(tokenKey, user.id, this.VERIFICATION_TOKEN_EXPIRY)
         await emailService.sendVerificationEmail(user.email, user.name, token)
 
         logger.info({

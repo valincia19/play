@@ -1,5 +1,6 @@
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { env } from '../config/env'
 import * as userSchema from './user.schema'
 import * as billingSchema from './billing.schema'
 import * as videoSchema from './video.schema'
@@ -11,15 +12,26 @@ import * as blogSchema from './blog.schema'
 import * as adSchema from './ad_settings.schema'
 import * as domainSchema from './domain.schema'
 
-const connectionString = process.env.DATABASE_URL!
+const schema = { ...userSchema, ...billingSchema, ...videoSchema, ...planSchema, ...folderSchema, ...storageSchema, ...auditSchema, ...blogSchema, ...adSchema, ...domainSchema }
 
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is required')
+// Lazy-init: connection is created on first access, not at module load time.
+// This prevents "Config not loaded" errors when Bun's --watch re-evaluates the module
+// graph before the entry point calls loadConfig().
+let _db: PostgresJsDatabase<typeof schema> | null = null
+
+function getDb(): PostgresJsDatabase<typeof schema> {
+  if (!_db) {
+    const client = postgres(env.databaseUrl, { max: 10 })
+    _db = drizzle(client, { schema })
+  }
+  return _db
 }
 
-const schema = { ...userSchema, ...billingSchema, ...videoSchema, ...planSchema, ...folderSchema, ...storageSchema, ...auditSchema, ...blogSchema, ...adSchema, ...domainSchema }
-const client = postgres(connectionString, { max: 10 })
-export const db: PostgresJsDatabase<typeof schema> = drizzle(client, { schema })
+export const db = new Proxy({} as PostgresJsDatabase<typeof schema>, {
+  get(_target, prop) {
+    return (getDb() as any)[prop]
+  }
+})
 
 export type Database = typeof db
 export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0]

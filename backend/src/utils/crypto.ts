@@ -19,16 +19,28 @@ export function generateVerificationToken(): string {
 // Supports key rotation via prefixes: enc:v1:...
 // Keys are loaded from STORAGE_ENCRYPTION_KEY (default v1)
 // Additional keys: STORAGE_ENCRYPTION_KEY_V2, etc.
+import { getConfig } from '../config/env'
 
-const KEYS: Record<string, string> = {
-  v1: process.env.STORAGE_ENCRYPTION_KEY || '',
-  v2: process.env.STORAGE_ENCRYPTION_KEY_V2 || '',
+// Lazy-init: keys are loaded on first use, not at module load time.
+// This avoids "Config not loaded" errors when Bun --watch re-evaluates the module graph.
+let _encryptionKeys: Record<string, string> | null = null
+
+function getEncryptionKeys(): Record<string, string> {
+  if (!_encryptionKeys) {
+    const cfg = getConfig()
+    _encryptionKeys = {
+      v1: cfg.storageEncryptionKey,
+      v2: cfg.storageEncryptionKeyV2,
+    }
+  }
+  return _encryptionKeys
 }
 
 const LATEST_VERSION = 'v1' // Update this to 'v2' when rotating
 
 function getKey(version: string): Buffer {
-  const keyHex = KEYS[version]
+  const keys = getEncryptionKeys()
+  const keyHex = keys[version]
   if (!keyHex || keyHex.length !== 64) {
     logger.fatal({ event: 'encryption_key_invalid', version })
     process.exit(1)

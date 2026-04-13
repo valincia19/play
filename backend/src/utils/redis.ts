@@ -1,4 +1,5 @@
 import { logger, logEvents } from './logger'
+import { env } from '../config/env'
 
 /**
  * Shared Redis client singleton.
@@ -12,10 +13,7 @@ class RedisManager {
   async getClient(): Promise<any> {
     if (this.client && this.initialized) return this.client
 
-    const redisUrl = process.env.REDIS_URL
-    if (!redisUrl) {
-      throw new Error('REDIS_URL environment variable is required')
-    }
+    const redisUrl = env.redisUrl
 
     const Redis = require('ioredis')
     
@@ -52,8 +50,7 @@ class RedisManager {
    */
   duplicate(): any {
     const Redis = require('ioredis')
-    const redisUrl = process.env.REDIS_URL
-    if (!redisUrl) throw new Error('REDIS_URL missing')
+    const redisUrl = env.redisUrl
     
     const client = new Redis(redisUrl, { 
       family: 4,
@@ -145,3 +142,4 @@ class RedisManager {
 }
 
 export const redisManager = new RedisManager()
+export const redisClient = redisManager.getClient.bind(redisManager)

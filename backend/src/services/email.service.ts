@@ -1,52 +1,33 @@
 import { logger } from '../utils/logger'
+import { env } from '../config/env'
 
 export interface EmailConfig {
-  smtpHost?: string
-  smtpPort?: number
-  smtpUser?: string
-  smtpPassword?: string
-  smtpFrom?: string
-  fromName?: string
+  smtpHost: string
+  smtpPort: number
+  smtpUser: string
+  smtpPassword: string
+  smtpFrom: string
+  fromName: string
 }
 
 class EmailService {
   private config: EmailConfig
   private transporter: any = null
-  private readonly SMTP_CONFIGURED: boolean
 
-  constructor(config: EmailConfig = {}) {
-    this.SMTP_CONFIGURED = !!process.env.SMTP_HOST
-
+  constructor() {
     this.config = {
-      smtpHost: config.smtpHost || process.env.SMTP_HOST,
-      smtpPort: config.smtpPort || Number(process.env.SMTP_PORT) || 587,
-      smtpUser: config.smtpUser || process.env.SMTP_USER,
-      smtpPassword: config.smtpPassword || process.env.SMTP_PASSWORD,
-      smtpFrom: config.smtpFrom || process.env.SMTP_FROM,
-      fromName: config.fromName || process.env.SMTP_FROM_NAME,
+      smtpHost: env.smtpHost,
+      smtpPort: env.smtpPort,
+      smtpUser: env.smtpUser,
+      smtpPassword: env.smtpPassword,
+      smtpFrom: env.smtpFrom,
+      fromName: env.smtpFromName,
     }
 
     this.initializeTransporter()
   }
 
   private initializeTransporter(): void {
-    if (!this.SMTP_CONFIGURED) {
-      logger.info({
-        event: 'email_smtp_not_configured',
-        message: 'SMTP not configured — emails will be logged to console only',
-      })
-      return
-    }
-
-    // Validate required SMTP config
-    if (!this.config.smtpUser || !this.config.smtpPassword) {
-      logger.error({
-        event: 'email_smtp_config_error',
-        message: 'SMTP_USER and SMTP_PASSWORD are required when SMTP_HOST is set',
-      })
-      return
-    }
-
     try {
       const nodemailer = require('nodemailer')
       this.transporter = nodemailer.createTransport({
@@ -136,17 +117,7 @@ class EmailService {
       })
     }
 
-    const frontendUrl = process.env.FRONTEND_URL
-    if (!frontendUrl) {
-      logger.error({
-        event: 'email_send_failed',
-        error: {
-          message: 'FRONTEND_URL environment variable is required for verification links',
-          name: 'MissingEnv',
-        },
-      })
-      throw new Error('FRONTEND_URL environment variable is required')
-    }
+    const frontendUrl = env.frontendUrl
 
     const verificationUrl = `${frontendUrl}/verify?token=${token}`
     const subject = 'Verify your email address'
@@ -278,4 +249,19 @@ class EmailService {
   }
 }
 
-export const emailService = new EmailService()
+// Lazy singleton — avoids 'Config not loaded' when Bun --watch re-evaluates modules
+let _emailServiceInstance: EmailService | null = null
+
+export function getEmailService(): EmailService {
+  if (!_emailServiceInstance) {
+    _emailServiceInstance = new EmailService()
+  }
+  return _emailServiceInstance
+}
+
+/** @deprecated Use getEmailService() instead */
+export const emailService = new Proxy({} as EmailService, {
+  get(_target, prop) {
+    return (getEmailService() as any)[prop]
+  }
+})

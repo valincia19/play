@@ -36,16 +36,31 @@ await fs.mkdir(TEMP_DIR, { recursive: true }).catch((err) => {
   logger.error({ event: 'temp_dir_create_failed', error: err.message, stack: err.stack })
 })
 
-export const videoQueue: Queue = new Queue(VIDEO_QUEUE_NAME, {
-  connection: redisManager.duplicate(),
-  defaultJobOptions: {
-    attempts: 2,          // 2 total attempts — fail fast, fallback handles the rest
-    backoff: {
-      type: 'exponential',
-      delay: 3000,        // 3s → 6s
-    },
-    removeOnComplete: true,
-    removeOnFail: false,
+// Lazy-init: Queue is created on first access, not at module load time.
+// This prevents "Config not loaded" errors when Bun --watch re-evaluates the module graph.
+let _videoQueue: Queue | null = null
+
+function getVideoQueue(): Queue {
+  if (!_videoQueue) {
+    _videoQueue = new Queue(VIDEO_QUEUE_NAME, {
+      connection: redisManager.duplicate(),
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: {
+          type: 'exponential',
+          delay: 3000,
+        },
+        removeOnComplete: true,
+        removeOnFail: false,
+      }
+    })
+  }
+  return _videoQueue
+}
+
+export const videoQueue: Queue = new Proxy({} as Queue, {
+  get(_target, prop) {
+    return (getVideoQueue() as any)[prop]
   }
 })
 

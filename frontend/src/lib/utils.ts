@@ -5,8 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+import { config } from '../config'
+
 /** Shared API base URL — single source of truth */
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+export const API_BASE_URL = config.apiBaseUrl
 
 /** Human-readable byte size (e.g. 1.5 GB) */
 export function formatBytes(bytes: number, decimals = 2): string {

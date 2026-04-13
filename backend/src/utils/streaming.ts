@@ -1,7 +1,9 @@
 import { createHash, createHmac } from 'crypto'
 import { logger } from './logger'
+import { getConfig } from '../config/env'
 
-const STREAM_SECRET = process.env.STREAM_SECRET || 'vplay_secure_stream_key_2024'
+// Lazy access — avoids 'Config not loaded' when Bun --watch re-evaluates modules
+function getStreamSecret() { return getConfig().streamSecret }
 
 /**
  * Generate a signed token for an HLS segment or playlist.
@@ -12,7 +14,7 @@ const STREAM_SECRET = process.env.STREAM_SECRET || 'vplay_secure_stream_key_2024
  */
 export function generateStreamSignature(videoId: string, expiry: number, context?: string): string {
   const data = `${videoId}:${expiry}:${context ?? 'anonymous'}`
-  return createHmac('sha256', STREAM_SECRET).update(data).digest('hex')
+  return createHmac('sha256', getStreamSecret()).update(data).digest('hex')
 }
 
 /**

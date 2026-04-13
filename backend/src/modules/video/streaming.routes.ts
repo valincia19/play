@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { videoService } from './service'
 import { verifyStreamSignature, signPlaylist, generateStreamSignature } from '../../utils/streaming'
 import { storageService } from '../storage'
+import { env } from '../../config/env'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { createS3Client } from '../../utils/s3'
 import { rateLimit } from 'elysia-rate-limit'
@@ -149,7 +150,7 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
     const referer = request.headers.get('referer')
     const origin = request.headers.get('origin')
     const fetchMode = request.headers.get('sec-fetch-mode')
-    const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const allowedOrigin = env.frontendUrl
     const isFromFrontend = (referer?.startsWith(allowedOrigin)) || (origin?.startsWith(allowedOrigin))
     if (!isFromFrontend && fetchMode === 'navigate') {
       throw error(errorCodes.INVALID_TOKEN, 'Unauthorized access')
@@ -215,7 +216,7 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
     const referer = request.headers.get('referer')
     const origin = request.headers.get('origin')
     const fetchMode = request.headers.get('sec-fetch-mode')
-    const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const allowedOrigin = env.frontendUrl
     const isFromFrontend = (referer?.startsWith(allowedOrigin)) || (origin?.startsWith(allowedOrigin))
     if (!isFromFrontend && fetchMode === 'navigate') {
       throw error(errorCodes.INVALID_TOKEN, 'Unauthorized access')

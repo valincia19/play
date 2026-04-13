@@ -1,11 +1,20 @@
+import { loadConfig } from './config/env'
+
+// Initialize and validate config first
+loadConfig()
+
 import { Elysia } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import { rateLimit } from 'elysia-rate-limit'
 import { createHash } from 'crypto'
-import { authRoutes, videoRoutes, videoStreamingRoutes, billingRoutes, publicBillingRoutes, adminRoutes, folderRoutes, folderStreamingRoutes, publicBlogRoutes, adRoutes, domainRoutes, analyticsRoutes } from './routes'
+import { authRoutes, videoRoutes, videoStreamingRoutes, billingRoutes, publicBillingRoutes, adminRoutes, folderRoutes, folderStreamingRoutes, publicBlogRoutes, adRoutes, domainRoutes, analyticsRoutes, errorMonitoringRoutes } from './routes'
+import { scheduledMonitoring } from './utils/error-dashboard'
 import { logger, logEvents } from './utils/logger'
 import { GB } from './utils/constants'
 import { loadApiRuntimeConfig } from './config/runtime'
+import { env } from './config/env'
+import { createSecurityMiddleware } from './middleware/security.middleware'
+import { SECURITY, securityMiddlewareConfig } from './config/security'
 
 const { frontendUrl, port } = loadApiRuntimeConfig()
 
@@ -15,16 +24,36 @@ interface RequestStore {
 }
 
 const app = new Elysia()
+  // Apply security middleware first
+  .use(createSecurityMiddleware)
   .use(cors({
     origin: [
       frontendUrl,
       // Share domain (verply.net) also needs API access for video playback
-      process.env.SHARE_DOMAIN ? `https://${process.env.SHARE_DOMAIN}` : '',
+      env.shareDomain ? `https://${env.shareDomain}` : '',
     ].filter(Boolean),
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
+    methods: SECURITY.CORS.allowedMethods,
+    allowedHeaders: SECURITY.CORS.allowedHeaders,
+    credentials: SECURITY.CORS.credentials,
   }))
+  // --- Security Headers ---
+  .onBeforeHandle(({ set, request }) => {
+    // Apply security headers configuration
+    if (securityMiddlewareConfig.headers.enabled) {
+      Object.entries(SECURITY.HEADERS).forEach(([key, value]) => {
+        set.headers[key] = value
+      })
+    }
+
+    // HTTPS enforcement
+    if (securityMiddlewareConfig.httpsEnforcement.enabled) {
+      const url = new URL(request.url)
+      if (url.protocol === 'http:') {
+        const httpsUrl = `https://${url.host}${url.pathname}${url.search}`
+        return Response.redirect(httpsUrl, securityMiddlewareConfig.httpsEnforcement.statusCode)
+      }
+    }
+  })
   // --- Rate Limiting System ---
   // Separate tiers for guests (strict) and authenticated users (generous).
   // Dashboard pages load 10+ video cards simultaneously, each needing
@@ -154,6 +183,7 @@ const app = new Elysia()
   .use(adRoutes)
   .use(domainRoutes)
   .use(analyticsRoutes)
+  .use(errorMonitoringRoutes) // Error monitoring dashboard routes
   .get('/', () => ({
     message: 'Vercelplay API',
     version: '1.0.0',
@@ -182,6 +212,17 @@ app.listen({
   })
   console.log(`🦊 Vercelplay API running on http://localhost:${port}`)
   console.log(`📚 Documentation: http://localhost:${port}`)
+
+  // Start error monitoring system
+  try {
+    scheduledMonitoring.start()
+    console.log(`📊 Error monitoring system started`)
+  } catch (error) {
+    logger.error({
+      event: 'monitoring_start_failed',
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
 })
 
 export { app }

@@ -66,7 +66,7 @@ const app = new Elysia()
     max: 150,        // 15 req/s average — handles dashboard page loads with many video cards
     generator: (req: Request) => {
       const auth = req.headers.get('authorization')
-      const ip = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'anon'
+      const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'anon'
       if (auth?.startsWith('Bearer ')) {
         const hash = createHash('sha1').update(auth.slice(7)).digest('hex')
         return `burst:user:${hash}`
@@ -86,7 +86,7 @@ const app = new Elysia()
     max: 3000,
     generator: (req: Request) => {
       const auth = req.headers.get('authorization')
-      const ip = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'anon'
+      const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for') || 'anon'
       if (auth?.startsWith('Bearer ')) {
         const hash = createHash('sha1').update(auth.slice(7)).digest('hex')
         return `sustained:user:${hash}`
@@ -156,7 +156,7 @@ const app = new Elysia()
       logger.warn({
         event: 'rate_limit_triggered',
         url: request.url,
-        ip: request.headers.get('x-forwarded-for') || 'direct',
+        ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'direct',
         ua: request.headers.get('user-agent')
       })
     }

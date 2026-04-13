@@ -24,7 +24,13 @@ function getErrorStatus(err: unknown): number {
  * Supports X-Forwarded-For for reverse proxy setups (Docker, Nginx, etc.)
  */
 function getClientIp(request: Request, server: any): string {
-  // Check X-Forwarded-For first (reverse proxy / Docker)
+  // Check CF-Connecting-IP first since we use Cloudflare
+  const cfIp = request.headers.get('cf-connecting-ip')
+  if (cfIp) {
+    return cfIp.trim()
+  }
+
+  // Fallback to X-Forwarded-For (Docker/Nginx)
   const forwarded = request.headers.get('x-forwarded-for')
   if (forwarded) {
     return forwarded.split(',')[0]?.trim() || 'unknown'

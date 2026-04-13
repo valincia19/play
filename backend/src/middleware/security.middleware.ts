@@ -24,7 +24,7 @@ export const createSecurityMiddleware = (app: Elysia) => {
           event: 'invalid_content_type',
           url: request.url,
           contentType: contentType,
-          ip: request.headers.get('x-forwarded-for') || 'unknown'
+          ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown'
         })
         return false
       }
@@ -57,7 +57,7 @@ export const createSecurityMiddleware = (app: Elysia) => {
         url: request.url,
         // Hash emails instead of logging them directly
         email: getEmailHash(request.headers.get('x-user-email') || undefined),
-        ip: request.headers.get('x-forwarded-for') || request.headers.get('cf-connecting-ip') || 'unknown',
+        ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown',
         // Truncate user agent for privacy
         userAgent: truncateUserAgent(request.headers.get('user-agent'))
       })
@@ -68,7 +68,7 @@ export const createSecurityMiddleware = (app: Elysia) => {
           event: 'invalid_content_type',
           url: request.url,
           contentType: request.headers.get('content-type'),
-          ip: request.headers.get('x-forwarded-for') || 'unknown'
+          ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown'
         })
       }
     })
@@ -88,7 +88,7 @@ export const createSecurityMiddleware = (app: Elysia) => {
             event: 'request_too_large',
             url: request.url,
             sizeMB: sizeInMB,
-            ip: request.headers.get('x-forwarded-for') || 'unknown'
+            ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown'
           })
           return { success: false, error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request payload is too large' } }
         }
@@ -97,7 +97,7 @@ export const createSecurityMiddleware = (app: Elysia) => {
     // Rate limiting for sensitive endpoints
     .derive({ as: 'global' }, ({ request }) => {
       const url = new URL(request.url)
-      const ip = request.headers.get('x-forwarded-for') || request.headers.get('cf-connecting-ip') || 'unknown'
+      const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown'
 
       // Return enhanced rate limiting config for sensitive endpoints
       if (sensitiveEndpoints.some(endpoint => url.pathname.startsWith(endpoint))) {

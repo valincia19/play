@@ -48,7 +48,8 @@ const app = new Elysia()
     // HTTPS enforcement
     if (securityMiddlewareConfig.httpsEnforcement.enabled) {
       const url = new URL(request.url)
-      if (url.protocol === 'http:') {
+      const forwardProto = request.headers.get('x-forwarded-proto')
+      if (url.protocol === 'http:' && forwardProto !== 'https') {
         const httpsUrl = `https://${url.host}${url.pathname}${url.search}`
         return Response.redirect(httpsUrl, securityMiddlewareConfig.httpsEnforcement.statusCode)
       }

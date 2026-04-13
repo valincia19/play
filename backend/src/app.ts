@@ -137,7 +137,12 @@ const app = new Elysia()
       errorDetail.errorName = err.name
     } else if (isObjectError) {
       errorDetail.errorKeys = Object.keys(errObj)
-      errorDetail.rawError = JSON.stringify(errObj, null, 0).slice(0, 500)
+      try {
+        // Prevent crashes on circular objects like AWS SDK errors
+        errorDetail.rawError = JSON.stringify(errObj, null, 0).slice(0, 500)
+      } catch (safeErr) {
+        errorDetail.rawError = '[Failed to serialize object - circular reference]'
+      }
     }
 
     logger.error(errorDetail)

@@ -178,13 +178,18 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
           if (contentLength > 0 && !await checkBandwidthQuota(video.userId, contentLength)) {
             throw error(errorCodes.RATE_LIMIT_EXCEEDED, 'Weekly bandwidth limit exceeded.')
           }
-          set.status = proxyRes.status
-          if (proxyRes.headers.get('content-range')) set.headers['Content-Range'] = proxyRes.headers.get('content-range') as string
-          if (proxyRes.headers.get('accept-ranges')) set.headers['Accept-Ranges'] = proxyRes.headers.get('accept-ranges') as string
-          set.headers['Content-Type'] = proxyRes.headers.get('content-type') || 'video/mp4'
-          if (contentLengthStr) set.headers['Content-Length'] = contentLengthStr
+          const headers = new Headers()
+          headers.set('Content-Type', proxyRes.headers.get('content-type') || 'video/mp4')
+          if (proxyRes.headers.get('content-range')) headers.set('Content-Range', proxyRes.headers.get('content-range') as string)
+          if (proxyRes.headers.get('accept-ranges')) headers.set('Accept-Ranges', proxyRes.headers.get('accept-ranges') as string)
+          if (contentLengthStr) headers.set('Content-Length', contentLengthStr)
+          
           if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
-          return proxyRes.body as any
+          
+          return new Response(proxyRes.body as any, {
+            status: proxyRes.status,
+            headers
+          })
         } else {
           const { client, creds } = await getS3ClientForBucket(video.bucketId)
           const s3Response = await client.send(new GetObjectCommand({ Bucket: creds.name, Key: video.videoUrl, Range: range || undefined }))
@@ -192,13 +197,18 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
           if (contentLength > 0 && !await checkBandwidthQuota(video.userId, contentLength)) {
             throw error(errorCodes.RATE_LIMIT_EXCEEDED, 'Weekly bandwidth limit exceeded.')
           }
-          set.status = s3Response.$metadata.httpStatusCode || 200
-          if (s3Response.ContentRange) set.headers['Content-Range'] = s3Response.ContentRange
-          if (s3Response.AcceptRanges) set.headers['Accept-Ranges'] = s3Response.AcceptRanges
-          set.headers['Content-Type'] = s3Response.ContentType || 'video/mp4'
-          if (s3Response.ContentLength) set.headers['Content-Length'] = s3Response.ContentLength.toString()
+          const headers = new Headers()
+          headers.set('Content-Type', s3Response.ContentType || 'video/mp4')
+          if (s3Response.ContentRange) headers.set('Content-Range', s3Response.ContentRange)
+          if (s3Response.AcceptRanges) headers.set('Accept-Ranges', s3Response.AcceptRanges)
+          if (s3Response.ContentLength) headers.set('Content-Length', s3Response.ContentLength.toString())
+          
           if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
-          return s3Response.Body?.transformToWebStream()
+          
+          return new Response(s3Response.Body?.transformToWebStream() as any, {
+            status: s3Response.$metadata.httpStatusCode || 200,
+            headers
+          })
         }
       }
       const host = request.headers.get('host')
@@ -250,13 +260,18 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
         if (contentLength > 0 && !await checkBandwidthQuota(video.userId, contentLength)) {
           throw error(errorCodes.RATE_LIMIT_EXCEEDED, 'Weekly bandwidth limit exceeded.')
         }
-        set.status = s3Response.$metadata.httpStatusCode || 200
-        if (s3Response.ContentRange) set.headers['Content-Range'] = s3Response.ContentRange
-        if (s3Response.AcceptRanges) set.headers['Accept-Ranges'] = s3Response.AcceptRanges
-        set.headers['Content-Type'] = s3Response.ContentType || 'video/mp4'
-        if (s3Response.ContentLength) set.headers['Content-Length'] = s3Response.ContentLength.toString()
+        const headers = new Headers()
+        headers.set('Content-Type', s3Response.ContentType || 'video/mp4')
+        if (s3Response.ContentRange) headers.set('Content-Range', s3Response.ContentRange)
+        if (s3Response.AcceptRanges) headers.set('Accept-Ranges', s3Response.AcceptRanges)
+        if (s3Response.ContentLength) headers.set('Content-Length', s3Response.ContentLength.toString())
+        
         if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
-        return s3Response.Body?.transformToWebStream()
+        
+        return new Response(s3Response.Body?.transformToWebStream() as any, {
+          status: s3Response.$metadata.httpStatusCode || 200,
+          headers
+        })
       }
       const { client, creds } = await getS3ClientForBucket(video.bucketId)
       const normalizedHlsPath = (video.hlsPath || '').replace(/\\/g, '/')

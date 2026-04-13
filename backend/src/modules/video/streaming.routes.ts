@@ -198,7 +198,7 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
           set.headers['Content-Type'] = s3Response.ContentType || 'video/mp4'
           if (s3Response.ContentLength) set.headers['Content-Length'] = s3Response.ContentLength.toString()
           if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
-          return s3Response.Body as any
+          return s3Response.Body?.transformToWebStream()
         }
       }
       const host = request.headers.get('host')
@@ -256,7 +256,7 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
         set.headers['Content-Type'] = s3Response.ContentType || 'video/mp4'
         if (s3Response.ContentLength) set.headers['Content-Length'] = s3Response.ContentLength.toString()
         if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
-        return s3Response.Body as any
+        return s3Response.Body?.transformToWebStream()
       }
       const { client, creds } = await getS3ClientForBucket(video.bucketId)
       const normalizedHlsPath = (video.hlsPath || '').replace(/\\/g, '/')
@@ -275,7 +275,7 @@ export const videoStreamingRoutes = new Elysia({ prefix: '/v' })
         if (s3Response.ContentLength) set.headers['Content-Length'] = s3Response.ContentLength.toString()
         set.headers['Cache-Control'] = 'public, max-age=3600'
         if (contentLength > 0) trackBandwidth(video.userId, contentLength).catch(() => {})
-        return s3Response.Body as any
+        return s3Response.Body?.transformToWebStream()
       }
       const data = await client.send(new GetObjectCommand({ Bucket: creds.name, Key: s3Key }))
       const content = await data.Body?.transformToString()

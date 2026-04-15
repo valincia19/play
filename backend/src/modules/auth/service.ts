@@ -180,7 +180,7 @@ class AuthService {
       data: { token: token.substring(0, 8) + '...' },
     })
 
-    if (!token || typeof token !== 'string' || token.length !== 6) {
+    if (!token || typeof token !== 'string' || token.length !== 64) {
       logger.warn({
         event: logEvents.USER_VERIFY_FAILED,
         reason: 'invalid_token',

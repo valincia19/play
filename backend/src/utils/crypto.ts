@@ -12,7 +12,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function generateVerificationToken(): string {
-  return randomBytes(3).toString('hex')
+  return randomBytes(32).toString('hex')
 }
 
 // ─── AES-256-GCM Symmetric Encryption (Versioned) ───────────────────

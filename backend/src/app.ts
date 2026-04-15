@@ -29,8 +29,11 @@ const app = new Elysia()
   .use(cors({
     origin: [
       frontendUrl,
+      // Also allow www subdomain
+      frontendUrl.replace('://', '://www.'),
       // Share domain (verply.net) also needs API access for video playback
       env.shareDomain ? `https://${env.shareDomain}` : '',
+      env.shareDomain ? `https://www.${env.shareDomain}` : '',
     ].filter(Boolean),
     methods: SECURITY.CORS.allowedMethods,
     allowedHeaders: SECURITY.CORS.allowedHeaders,

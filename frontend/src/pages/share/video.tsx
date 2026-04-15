@@ -93,6 +93,7 @@ export function ShareVideo() {
         const json = await res.json()
         if (!res.ok) throw new Error(json.message || 'Failed to fetch video details')
         setData(json.data)
+        document.title = json.data.title || 'Video'
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'An unexpected error occurred')
       } finally {
@@ -100,6 +101,7 @@ export function ShareVideo() {
       }
     }
     fetchMetadata()
+    return () => { document.title = 'Vercelplay - Video Infrastructure for Developers' }
   }, [id])
 
   // --- 1. View Tracking (Active Participation) ---

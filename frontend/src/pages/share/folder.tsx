@@ -125,6 +125,7 @@ export function ShareFolder() {
         const json = await res.json()
         if (!res.ok) throw new Error(json.message || 'Failed to fetch folder details')
         setData(json.data)
+        document.title = `📁 ${json.data.name || 'Folder'}`
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'An unexpected error occurred')
       } finally {
@@ -132,6 +133,7 @@ export function ShareFolder() {
       }
     }
     fetchMetadata()
+    return () => { document.title = 'Vercelplay - Video Infrastructure for Developers' }
   }, [id])
 
   // Inject Script-Based Ads

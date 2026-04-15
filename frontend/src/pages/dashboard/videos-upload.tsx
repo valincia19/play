@@ -28,7 +28,7 @@ import {
   RiListCheck,
   RiUploadCloud2Line,
 } from "@remixicon/react"
-import { API_BASE_URL } from "@/lib/utils"
+import { API_BASE_URL, formatBytes } from "@/lib/utils"
 
 type QualityPresetId = 'fast' | 'saver' | 'balanced' | 'premium' | 'ultra'
 
@@ -1107,8 +1107,8 @@ export function DashboardVideosUpload() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
                         {storageUsage.maxMB === -1
-                          ? `${storageUsage.usedMB} MB used`
-                          : `${storageUsage.usedMB} / ${storageUsage.maxMB} MB`}
+                          ? `${formatBytes(storageUsage.usedMB * 1024 * 1024)} used`
+                          : `${formatBytes(storageUsage.usedMB * 1024 * 1024)} / ${formatBytes(storageUsage.maxMB * 1024 * 1024)}`}
                       </span>
                       {storageUsage.maxMB !== -1 && (
                         <span className={`font-medium ${(storageUsage.usedMB / storageUsage.maxMB) * 100 > 90 ? 'text-red-500' : 'text-muted-foreground'}`}>
@@ -1146,8 +1146,8 @@ export function DashboardVideosUpload() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
                         {bandwidthUsage.isUnlimited
-                          ? `${bandwidthUsage.usedMB} MB used`
-                          : `${bandwidthUsage.usedMB} / ${bandwidthUsage.maxMB} MB`}
+                          ? `${formatBytes(bandwidthUsage.usedMB * 1024 * 1024)} used`
+                          : `${formatBytes(bandwidthUsage.usedMB * 1024 * 1024)} / ${formatBytes(bandwidthUsage.maxMB * 1024 * 1024)}`}
                       </span>
                       {!bandwidthUsage.isUnlimited && (
                         <span className={`font-medium ${bandwidthUsage.percent > 90 ? 'text-red-500' : 'text-muted-foreground'}`}>

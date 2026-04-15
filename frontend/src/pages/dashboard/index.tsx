@@ -141,7 +141,7 @@ export function DashboardIndex() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {bwUsage ? `${bwUsage.usedMB} MB` : formatBytes(data?.totalBandwidth || 0)}
+              {bwUsage ? formatBytes(bwUsage.usedMB * 1024 * 1024) : formatBytes(data?.totalBandwidth || 0)}
             </div>
             <div className="flex items-center gap-2 mt-1">
               {bwUsage && !bwUsage.isUnlimited && (
@@ -153,7 +153,7 @@ export function DashboardIndex() {
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                {bwUsage?.isUnlimited ? 'Unlimited' : bwUsage ? `of ${bwUsage.maxMB} MB` : 'This billing cycle'}
+                {bwUsage?.isUnlimited ? 'Unlimited' : bwUsage ? `of ${formatBytes(bwUsage.maxMB * 1024 * 1024)}` : 'This billing cycle'}
               </p>
             </div>
           </CardContent>
@@ -166,7 +166,7 @@ export function DashboardIndex() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {storageUsage ? `${storageUsage.usedMB} MB` : formatBytes(data?.totalStorage || 0)}
+              {storageUsage ? formatBytes(storageUsage.usedMB * 1024 * 1024) : formatBytes(data?.totalStorage || 0)}
             </div>
             <div className="flex items-center gap-2 mt-1">
               {storageUsage && storageUsage.maxMB !== -1 && (
@@ -178,7 +178,7 @@ export function DashboardIndex() {
                 </div>
               )}
               <p className="text-xs text-muted-foreground">
-                {storageUsage?.maxMB === -1 ? 'Unlimited' : storageUsage ? `of ${storageUsage.maxMB} MB` : 'Total disk space'}
+                {storageUsage?.maxMB === -1 ? 'Unlimited' : storageUsage ? `of ${formatBytes(storageUsage.maxMB * 1024 * 1024)}` : 'Total disk space'}
               </p>
             </div>
           </CardContent>

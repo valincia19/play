@@ -14,8 +14,10 @@ import os from 'os'
 import { UnrecoverableError } from 'bullmq'
 import { logger } from './logger'
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path)
-ffmpeg.setFfprobePath(ffprobeInstaller.path)
+// Prefer system FFmpeg (installed via Dockerfile) over npm package version
+// The npm @ffmpeg-installer version is from 2018 and lacks codecs/protocols
+ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || ffmpegInstaller.path)
+ffmpeg.setFfprobePath(process.env.FFPROBE_PATH || ffprobeInstaller.path)
 
 const execFileAsync = promisify(execFile)
 

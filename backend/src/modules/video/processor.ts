@@ -7,8 +7,9 @@ import ffmpeg from 'fluent-ffmpeg'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 import ffprobeInstaller from '@ffprobe-installer/ffprobe'
 
-ffmpeg.setFfmpegPath(ffmpegInstaller.path)
-ffmpeg.setFfprobePath(ffprobeInstaller.path)
+// Prefer system FFmpeg (installed via Dockerfile) over npm package version
+ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || ffmpegInstaller.path)
+ffmpeg.setFfprobePath(process.env.FFPROBE_PATH || ffprobeInstaller.path)
 
 import path from 'path'
 import fs from 'fs/promises'

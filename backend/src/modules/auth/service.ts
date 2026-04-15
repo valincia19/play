@@ -180,7 +180,7 @@ class AuthService {
       data: { token: token.substring(0, 8) + '...' },
     })
 
-    if (!token || typeof token !== 'string' || token.length !== 64) {
+    if (!token || typeof token !== 'string' || token.length !== 6) {
       logger.warn({
         event: logEvents.USER_VERIFY_FAILED,
         reason: 'invalid_token',
@@ -191,10 +191,10 @@ class AuthService {
 
     const tokenKey = `verification:${token}`
 
-    // Get user ID from Redis
+    // Get user ID from Redis (stored via JSON.stringify, so parse it back)
     const redis = await redisManager.getClient()
-    const userId = await redis.get(tokenKey)
-    if (!userId) {
+    const rawValue = await redis.get(tokenKey)
+    if (!rawValue) {
       logger.warn({
         event: logEvents.USER_VERIFY_FAILED,
         reason: 'token_expired',
@@ -202,6 +202,7 @@ class AuthService {
       })
       throw error(errorCodes.TOKEN_EXPIRED, 'Verification token has expired or is invalid')
     }
+    const userId = JSON.parse(rawValue) as string
 
     // Find user
     const foundUsers = await db.select().from(users).where(eq(users.id, userId)).limit(1)

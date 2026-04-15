@@ -100,6 +100,14 @@ interface FolderVideo {
   streamUrl: string
 }
 
+interface Subfolder {
+  id: string
+  shortId: string
+  name: string
+  visibility: string
+  createdAt: string
+}
+
 interface ShareFolderData {
   id: string
   shortId: string
@@ -107,6 +115,7 @@ interface ShareFolderData {
   visibility: string
   createdAt: string
   videos: FolderVideo[]
+  subfolders: Subfolder[]
   ads: AdPlacement[]
 }
 
@@ -252,11 +261,39 @@ export function ShareFolder() {
         {/* Metadata */}
         <div className="flex items-center gap-3 mt-2 mb-6 text-xs text-white/40">
           <span>{data.videos.length} video{data.videos.length !== 1 ? 's' : ''}</span>
+          {data.subfolders.length > 0 && (
+            <>
+              <span className="text-white/15">·</span>
+              <span>{data.subfolders.length} folder{data.subfolders.length !== 1 ? 's' : ''}</span>
+            </>
+          )}
           <span className="text-white/15">·</span>
           <span>{formatBytes(totalSize)}</span>
           <span className="text-white/15">·</span>
           <span>{formattedDate}</span>
         </div>
+
+        {/* Subfolders */}
+        {data.subfolders.length > 0 && (
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mb-6">
+            {data.subfolders.map((folder) => (
+              <a
+                key={folder.id}
+                href={`/f/${folder.shortId || folder.id}`}
+                className="group flex items-center gap-3 p-3 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+              >
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-blue-500/15">
+                  <RiFolder3Fill className="size-4 text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-[13px] font-medium text-white/80 truncate group-hover:text-white transition-colors">
+                    {folder.name}
+                  </h3>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
 
         {/* Video Grid */}
         {data.videos.length === 0 ? (

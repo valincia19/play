@@ -24,6 +24,9 @@ export const folderStreamingRoutes = new Elysia({ prefix: '/f' })
     // Get public/unlisted videos in this folder
     const folderVideos = await folderService.getPublicVideosInFolder(folder.id)
 
+    // Get public/unlisted subfolders
+    const subfolders = await folderService.getPublicSubfolders(folder.id)
+
     // Generate short-lived stream URLs for each video
     const context = 'public_share'
     const expiry = Math.floor(Date.now() / 1000) + 3600 * 2 // 2 hours
@@ -54,6 +57,7 @@ export const folderStreamingRoutes = new Elysia({ prefix: '/f' })
         visibility: folder.visibility,
         createdAt: folder.createdAt,
         videos: videosWithUrls,
+        subfolders,
         ads: userAds,
       },
     }

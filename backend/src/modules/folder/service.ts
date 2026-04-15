@@ -161,6 +161,25 @@ class FolderService {
     return { success: true }
   }
 
+  /** Get public/unlisted subfolders inside a folder (for share page) */
+  async getPublicSubfolders(parentId: string) {
+    return db.select({
+      id: folders.id,
+      shortId: folders.shortId,
+      name: folders.name,
+      visibility: folders.visibility,
+      createdAt: folders.createdAt,
+    })
+      .from(folders)
+      .where(
+        and(
+          eq(folders.parentId, parentId),
+          or(eq(folders.visibility, 'public'), eq(folders.visibility, 'unlisted'))
+        )
+      )
+      .orderBy(desc(folders.createdAt))
+  }
+
   /** Get public/unlisted videos inside a folder (for share page) */
   async getPublicVideosInFolder(folderId: string) {
     return db.select({

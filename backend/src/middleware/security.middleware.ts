@@ -1,6 +1,5 @@
 import { Elysia } from 'elysia'
 import { logger, logEvents } from '../utils/logger'
-import { createHash } from 'crypto'
 
 // Rate limiting by IP with different tiers
 export const createSecurityMiddleware = (app: Elysia) => {
@@ -32,35 +31,11 @@ export const createSecurityMiddleware = (app: Elysia) => {
     return true
   }
 
-  // Email hash for privacy logging
-  const getEmailHash = (email: string | undefined) => {
-    if (!email) return 'none'
-    return createHash('sha256').update(email.toLowerCase()).digest('hex').substring(0, 8)
-  }
-
-  // User agent truncation for privacy
-  const truncateUserAgent = (ua: string | null) => {
-    if (!ua) return 'none'
-    return ua.substring(0, 100) + (ua.length > 100 ? '...' : '')
-  }
-
   return app
-    // Request logging with privacy protection
+    // Request logging with privacy protection — only log errors and warnings
     .onRequest(({ request, store }) => {
       // Timing for slow request detection
       (store as { startTime?: number }).startTime = Date.now()
-
-      // Log request with privacy protection
-      logger.info({
-        event: 'http_request_secure',
-        method: request.method,
-        url: request.url,
-        // Hash emails instead of logging them directly
-        email: getEmailHash(request.headers.get('x-user-email') || undefined),
-        ip: request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown',
-        // Truncate user agent for privacy
-        userAgent: truncateUserAgent(request.headers.get('user-agent'))
-      })
 
       // Validate content type for JSON endpoints
       if (!validateContentType(request)) {

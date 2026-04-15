@@ -146,7 +146,7 @@ export function StudioUsers() {
     const isValid = (
       editForm.name.trim().length >= 2 &&
       editForm.email.trim().length > 0 &&
-      (!editForm.password || editForm.password.length >= 8)
+      (!editForm.password || editForm.password.length >= 6)
     )
     setIsFormValid(isValid)
   }, [editForm])
@@ -217,9 +217,9 @@ export function StudioUsers() {
       toast.error('Please enter a valid email address')
       return
     }
-    // Backend requires min 8 characters for password
-    if (editForm.password && editForm.password.length < 8) {
-      toast.error('Password must be at least 8 characters')
+    // Backend requires min 6 characters for password
+    if (editForm.password && editForm.password.length < 6) {
+      toast.error('Password must be at least 6 characters')
       return
     }
 
@@ -419,13 +419,13 @@ export function StudioUsers() {
               <Label>New Password (Optional)</Label>
               <Input
                 type="password"
-                placeholder="Leave blank to keep current password (min 8 chars)"
+                placeholder="Leave blank to keep current password (min 6 chars)"
                 autoComplete="new-password"
                 value={editForm.password}
                 onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
               />
-              {editForm.password && editForm.password.length < 8 && (
-                <p className="text-xs text-destructive">Password must be at least 8 characters</p>
+              {editForm.password && editForm.password.length < 6 && (
+                <p className="text-xs text-destructive">Password must be at least 6 characters</p>
               )}
             </div>
             <div className="grid gap-2">

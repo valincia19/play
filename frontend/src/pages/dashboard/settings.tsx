@@ -65,8 +65,8 @@ export function DashboardSettings() {
 
   const handleChangePassword = async () => {
     // Validation
-    if (newPassword.length < 8) {
-      setPasswordError("Password must be at least 8 characters long")
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters long")
       return
     }
 
@@ -211,7 +211,7 @@ export function DashboardSettings() {
                     disabled={isChangingPassword}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Password must be at least 8 characters long.
+                    Password must be at least 6 characters long.
                   </p>
                 </div>
                 <div className="space-y-2">

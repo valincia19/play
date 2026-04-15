@@ -83,7 +83,7 @@ class AuthService {
         reason: 'invalid_password',
         data: { passwordLength: input.password.length },
       })
-      throw error(errorCodes.INVALID_PASSWORD, 'Password must be at least 8 characters')
+      throw error(errorCodes.INVALID_PASSWORD, 'Password must be at least 6 characters')
     }
 
     if (isDisposableEmail(trimmedEmail)) {

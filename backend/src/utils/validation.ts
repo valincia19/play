@@ -12,28 +12,7 @@ export function isValidPassword(password: string): boolean {
     return false
   }
 
-  // Minimum 12 characters (increased from 8)
-  if (password.length < 12) return false
-
-  // Must contain at least one uppercase letter
-  const hasUpperCase = /[A-Z]/.test(password)
-
-  // Must contain at least one lowercase letter
-  const hasLowerCase = /[a-z]/.test(password)
-
-  // Must contain at least one number
-  const hasNumber = /[0-9]/.test(password)
-
-  // Must contain at least one special character
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password)
-
-  // Enhanced logging for password validation failures
-  if (!hasUpperCase) console.warn('Password missing uppercase letter')
-  if (!hasLowerCase) console.warn('Password missing lowercase letter')
-  if (!hasNumber) console.warn('Password missing number')
-  if (!hasSpecial) console.warn('Password missing special character')
-
-  return hasUpperCase && hasLowerCase && hasNumber && hasSpecial
+  return password.length >= 6
 }
 
 // Blocklist of known disposable email domains
